@@ -125,6 +125,7 @@ static void gen_user_var(Program *p)
 	Var	*vp;
 	Expr	*sp, *ssp;
 	int	num_globals = 0;
+	uint	num_decls = 0;
 
 	printf("\n/* Variable declarations */\n");
 
@@ -135,17 +136,13 @@ static void gen_user_var(Program *p)
 	/* Convert internal type to `C' type */
 	foreach (vp, p->prog->extra.e_prog->first)
 	{
-		if (vp->decl && vp->type->tag >= V_CHAR)
+		if (vp->decl && vp->type->tag != T_NONE && vp->type->tag != T_EVFLAG)
 		{
 			gen_line_marker(vp->decl);
 			if (!opt_reent) printf("static");
 			indent(1);
 			gen_var_decl(vp);
-			if (!opt_reent)
-			{
-				printf(" = ");
-				gen_var_init(vp, 0);
-			}
+			num_decls++;
 			printf(";\n");
 			num_globals++;
 		}
@@ -177,6 +174,7 @@ static void gen_user_var(Program *p)
 			foreach (vp, ssp->extra.e_ss->var_list->first)
 			{
 				indent(level+1); gen_var_decl(vp); printf(";\n");
+				num_decls++;
 			}
 			foreach (sp, ssp->ss_states)
 			{
@@ -188,21 +186,24 @@ static void gen_user_var(Program *p)
 					foreach (vp, sp->extra.e_state->var_list->first)
 					{
 						indent(level+2); gen_var_decl(vp); printf(";\n");
+						num_decls++;
 					}
 					indent(level+1);
 					printf("} %s_%s;\n", NM_VARS, sp->value);
 				}
 			}
 			indent(level); printf("} %s_%s", NM_VARS, ssp->value);
-			if (!opt_reent)
-			{
-				printf(" = ");
-				gen_ss_user_var_init(ssp, level);
-			}
 			printf(";\n");
 		}
 	}
-	if (opt_reent) printf("};\n");
+	if (opt_reent)
+	{
+		if (!num_decls)
+		{
+			indent(1); printf("char dummy;\n");
+		}
+		printf("};\n");
+	}
 	printf("\n");
 }
 
