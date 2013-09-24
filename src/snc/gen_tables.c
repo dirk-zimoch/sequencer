@@ -232,7 +232,6 @@ static void fill_state_struct(Expr *sp, char *ss_name, uint ss_num)
 	printf("\t/* state name */        \"%s\",\n", sp->value);
 	printf("\t/* action function */   " NM_ACTION "_%s_%d_%s,\n", ss_name, ss_num, sp->value);
 	printf("\t/* event function */    " NM_EVENT "_%s_%d_%s,\n", ss_name, ss_num, sp->value);
-	printf("\t/* delay function */    " NM_DELAY "_%s_%d_%s,\n", ss_name, ss_num, sp->value);
 	printf("\t/* entry function */    ");
 	if (sp->state_entry)
 		printf(NM_ENTRY "_%s_%d_%s,\n", ss_name, ss_num, sp->value);
@@ -322,8 +321,7 @@ static void gen_ss_table(Expr *ss_list)
 		printf("\t{\n");
 		printf("\t/* state set name */    \"%s\",\n", ssp->value);
 		printf("\t/* states */            " NM_STATES "_%s,\n", ssp->value);
-		printf("\t/* number of states */  %d,\n", ssp->extra.e_ss->num_states);
-		printf("\t/* number of delays */  %d\n", ssp->extra.e_ss->num_delays);
+		printf("\t/* number of states */  %d\n", ssp->extra.e_ss->num_states);
 		printf("\t},\n");
 	}
 	printf("};\n");
