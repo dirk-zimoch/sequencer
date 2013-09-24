@@ -766,12 +766,13 @@ static void gen_var_init(Var *vp, int context, int level)
 	{
 		gen_line_marker(vp->init);
 		indent(level); printf("{ static ");
-		gen_var_decl(vp);
+		gen_type(vp->type, NM_INITVAR, vp->name);
 		printf(" = ");
 		gen_expr(context, vp->init, level);
 		printf("; memcpy(&");
 		gen_var_access(vp);
-		printf(", &%s, sizeof(%s)); }\n", vp->name, vp->name);
+		printf(", &" NM_INITVAR "%s, sizeof(" NM_INITVAR "%s)); }\n",
+			vp->name, vp->name);
 	}
 }
 

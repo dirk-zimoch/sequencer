@@ -225,7 +225,7 @@ unsigned type_assignable(Type *t)
     return type_assignable_array(t, 0);
 }
 
-static void gen_array_pointer(Type *t, enum type_tag last_tag, char *name)
+static void gen_array_pointer(Type *t, enum type_tag last_tag, const char *prefix, const char *name)
 {
     int paren = last_tag == T_ARRAY;
     switch (t->tag) {
@@ -233,22 +233,22 @@ static void gen_array_pointer(Type *t, enum type_tag last_tag, char *name)
         if (paren)
             printf("(");
         printf("*");
-        gen_array_pointer(t->parent, t->tag, name);
+        gen_array_pointer(t->parent, t->tag, prefix, name);
         if (paren)
             printf(")");
         break;
     case T_ARRAY:
-        gen_array_pointer(t->parent, t->tag, name);
+        gen_array_pointer(t->parent, t->tag, prefix, name);
         printf("[%d]", t->val.array.num_elems);
         break;
     default:
         if (name)
-            printf(" %s", name);
+            printf(" %s%s", prefix, name);
         break;
     }
 }
 
-void gen_type(Type *t, char *name)
+void gen_type(Type *t, const char *prefix, const char *name)
 {
     Type *bt = base_type(t);
 
@@ -265,5 +265,5 @@ void gen_type(Type *t, char *name)
     default:
         assert(impossible);
     }
-    gen_array_pointer(bt->parent, T_NONE, name);
+    gen_array_pointer(bt->parent, T_NONE, prefix, name);
 }
