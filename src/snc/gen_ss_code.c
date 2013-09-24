@@ -476,6 +476,14 @@ static void gen_expr(
 		printf(" %s ", ep->value);
 		gen_expr(context, ep->binop_right, 0);
 		break;
+	case E_SELECT:
+		gen_expr(context, ep->select_left, 0);
+		printf("%s", ep->value);
+		gen_expr(context, ep->select_right, 0);
+		break;
+	case E_MEMBER:
+		printf("%s", ep->value);
+		break;
 	case E_PAREN:
 		printf("(");
 		gen_expr(context, ep->paren_expr, 0);
