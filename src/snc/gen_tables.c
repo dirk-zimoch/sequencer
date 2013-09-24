@@ -261,6 +261,29 @@ static void encode_state_options(StateOptions options)
 	printf(")");
 } 
 
+/* Generate state set table, one entry for each state set */
+static void gen_ss_table(Expr *ss_list)
+{
+	Expr	*ssp;
+	int	num_ss;
+
+	printf("\n/* State set table */\n");
+	printf("static seqSS " NM_STATESETS "[] = {\n");
+	num_ss = 0;
+	foreach (ssp, ss_list)
+	{
+		if (num_ss > 0)
+			printf("\n");
+		num_ss++;
+		printf("\t{\n");
+		printf("\t/* state set name */    \"%s\",\n", ssp->value);
+		printf("\t/* states */            " NM_STATES "_%s,\n", ssp->value);
+		printf("\t/* number of states */  %d\n", ssp->extra.e_ss->num_states);
+		printf("\t},\n");
+	}
+	printf("};\n");
+}
+
 /* Generate a single program structure ("seqProgram") */
 static void gen_prog_table(Program *p)
 {
@@ -302,29 +325,6 @@ static void encode_options(Options options)
 	if (options.safe)
 		printf(" | OPT_SAFE");
 	printf("),\n");
-}
-
-/* Generate state set table, one entry for each state set */
-static void gen_ss_table(Expr *ss_list)
-{
-	Expr	*ssp;
-	int	num_ss;
-
-	printf("\n/* State set table */\n");
-	printf("static seqSS " NM_STATESETS "[] = {\n");
-	num_ss = 0;
-	foreach (ssp, ss_list)
-	{
-		if (num_ss > 0)
-			printf("\n");
-		num_ss++;
-		printf("\t{\n");
-		printf("\t/* state set name */    \"%s\",\n", ssp->value);
-		printf("\t/* states */            " NM_STATES "_%s,\n", ssp->value);
-		printf("\t/* number of states */  %d\n", ssp->extra.e_ss->num_states);
-		printf("\t},\n");
-	}
-	printf("};\n");
 }
 
 /* Generate event mask for a single state. The event mask has a bit set for each
