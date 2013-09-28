@@ -262,6 +262,7 @@ snl:
 	"typename"	{ TYPEWORD(TYPENAME,	"typename"); }
 	"union"		{ TYPEWORD(UNION,	"union"); }
 	"unsigned"	{ TYPEWORD(UNSIGNED,	"unsigned"); }
+	"void"		{ TYPEWORD(VOID,	"void"); }
 	"when"		{ KEYWORD(WHEN,		"when"); }
 	"while"		{ KEYWORD(WHILE,	"while"); }
 
