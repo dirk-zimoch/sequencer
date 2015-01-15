@@ -258,6 +258,9 @@ static void gen_global_defn(Node *ep)
 		gen_line_marker(ep);
 		gen_code("%s\n", ep->token.str);
 		break;
+	case D_ENUMDEF:
+		/* TODO: generate enum definition */
+		break;
 	case D_FUNCDEF:
 		gen_funcdef(ep);
 		break;

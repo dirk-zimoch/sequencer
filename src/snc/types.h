@@ -115,6 +115,7 @@ enum node_tag			/* description [child nodes...] */
 	D_ASSIGN,		/* assign statement [subscr,pvs] */
 	D_DECL,			/* variable declaration [init] */
 	D_ENTEX,		/* entry or exit statement [block] */
+	D_ENUMDEF,		/* enum definition [choices] */
 	D_FUNCDEF,		/* function definition [decl,block] */
 	D_MONITOR,		/* monitor statement [subscr] */
 	D_OPTION,		/* option definition [] */
@@ -313,9 +314,7 @@ enum multiplicity
 	M_MULTI			/* array, each element treated separately */
 };
 
-/* Accessors for child nodes. Would like to define structs for the
-   various node types with children, but then we could no longer
-   uniformly iterate over all children... */
+/* Accessors for child expressions */
 #define assign_subscr	children[0]
 #define assign_pvs	children[1]
 #define binop_left	children[0]
@@ -326,6 +325,7 @@ enum multiplicity
 #define cmpnd_stmts	children[1]
 #define decl_init	children[0]
 #define entex_block	children[0]
+#define enumdef_choices	children[0]
 #define for_init	children[0]
 #define for_cond	children[1]
 #define for_iter	children[2]
@@ -390,6 +390,7 @@ node_info[]
 	{ "D_ASSIGN",	2 },
 	{ "D_DECL",	1 },
 	{ "D_ENTEX",	1 },
+	{ "D_ENUMDEF",	1 },
 	{ "D_FUNCDEF",	2 },
 	{ "D_MONITOR",	1 },
 	{ "D_OPTION",	0 },

@@ -119,6 +119,7 @@ initial_defn(r) ::= option(x).			{ r = x; }
 initial_defn(r) ::= c_code(x).			{ r = x; }
 initial_defn(r) ::= funcdef(x).			{ r = x; }
 initial_defn(r) ::= structdef(x).		{ r = x; }
+initial_defn(r) ::= enumdef(x).			{ r = x; }
 
 final_defns(r) ::= final_defns(xs) final_defn(x). {
 	r = link_node(xs, x);
@@ -128,6 +129,7 @@ final_defns(r) ::= .				{ r = 0; }
 final_defn(r) ::= c_code(x).			{ r = x; }
 final_defn(r) ::= funcdef(x).			{ r = x; }
 final_defn(r) ::= structdef(x).			{ r = x; }
+final_defn(r) ::= enumdef(x).			{ r = x; }
 
 assign(r) ::= ASSIGN variable(v) to string(t) SEMICOLON. {
 	r = node(D_ASSIGN, v, 0, t);
@@ -505,6 +507,23 @@ member_decls(r) ::= member_decls(xs) member_decl(x).		{ r = link_node(xs, x); }
 
 member_decl(r) ::= basetype(t) declarator(d) SEMICOLON.		{ r = mk_decl(d, t); }
 member_decl(r) ::= c_code(x).					{ r = x; }
+
+// Enum Definitions
+
+enumdef(r) ::= ENUM NAME(t) LBRACE choices(cs) opt_comma RBRACE SEMICOLON. { r = node(D_ENUMDEF, t, cs); }
+
+choices(r) ::= choices(xs) COMMA choice(x).	{ r = link_node(xs, x); }
+choices(r) ::= choice(x).			{ r = x; }
+
+choice(r) ::= NAME(c).				{ r = node(E_VAR, c); }
+choice(r) ::= NAME(c) EQUAL(o) expr(i).	{ r = node(E_BINOP, o, node(E_VAR, c), i); }
+choice(r) ::= NAME(c) error. {
+	r = node(E_VAR, c);
+	report("expected '=' or ',' or '}'\n");
+}
+
+opt_comma ::= .
+opt_comma ::= COMMA.
 
 // Literal (C) code
 

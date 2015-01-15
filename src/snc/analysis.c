@@ -154,6 +154,9 @@ static void analyse_defns(Node *defn_list, Node *scope, Program *p)
 			analyse_funcdef(defn);
 			analyse_declaration(p->sym_table, scope, defn->funcdef_decl);
 			break;
+		case D_ENUMDEF:
+			/* TODO: analyse enum definition */
+			break;
 		case D_STRUCTDEF:
 			analyse_structdef(p->sym_table, defn);
 			break;
