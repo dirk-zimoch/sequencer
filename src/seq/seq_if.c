@@ -151,6 +151,7 @@ static pvStat wait_complete(
 	const char *call = evtype == pvEventGet ? "pvGet" : "pvPut";
 	while (*req)
 	{
+		DEBUG("wait_complete: dbName=%s, *req=%p, tmo=%f\n", dbch->dbName, *req, tmo);
 		switch (epicsEventWaitWithTimeout(ss->syncSem, tmo))
 		{
 		case epicsEventWaitOK:
@@ -385,6 +386,7 @@ static void anonymous_put(SS_ID ss, CHAN *ch)
 {
 	char *var = valPtr(ch,ss);
 
+	DEBUG("anonymous_put: enter, varName=%s\n", ch->varName);
 	if (ch->queue)
 	{
 		QUEUE queue = ch->queue;
@@ -393,7 +395,7 @@ static void anonymous_put(SS_ID ss, CHAN *ch)
 		boolean full;
 		struct putq_cp_arg arg = {ch, var};
 
-		DEBUG("anonymous_put: type=%d, size=%d, count=%d, buf_size=%d, q=%p\n",
+		DEBUG("anonymous_put(queued): type=%d, size=%d, count=%d, buf_size=%d, q=%p\n",
 			type, size, ch->count, pv_size_n(type, ch->count), queue);
 		print_channel_value(DEBUG, ch, var);
 
@@ -421,9 +423,13 @@ static void anonymous_put(SS_ID ss, CHAN *ch)
 	}
 	/* If there's an event flag associated with this channel, set it */
 	if (ch->syncedTo)
+	{
+		DEBUG("anonymous_put: ch->syncedTo->synced=%u\n", *ch->syncedTo->synced);
 		seq_efSet(ss, ch->syncedTo);
+	}
 	/* Wake up each state set that uses this channel in an event */
 	ss_wakeup(ss->prog, ch->eventNum);
+	DEBUG("anonymous_put: leave, ch->syncedTo=%p\n", ch->syncedTo);
 }
 
 /*

@@ -38,6 +38,7 @@ epicsShareFunc void seq_pvArraySync(SS_ID ss, CH_ID *chs, unsigned length, evfla
     PROG *sp = ss->prog;
     unsigned n;
 
+    DEBUG("pvSync: new_ev_flag=%p\n", new_ev_flag);
     epicsMutexMustLock(sp->lock);
     for (n = 0; n < length; n++) {
         CH_ID ch = chs[n];
@@ -51,6 +52,7 @@ epicsShareFunc void seq_pvArraySync(SS_ID ss, CH_ID *chs, unsigned length, evfla
                 bitSet(new_ev_flag->synced, nch);
             }
             ch->syncedTo = new_ev_flag;
+            DEBUG("pvSync: syncedTo=%p\n", ch->syncedTo);
         }
     }
     epicsMutexUnlock(sp->lock);

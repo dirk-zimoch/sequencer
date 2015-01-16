@@ -48,6 +48,8 @@ epicsShareFunc CH_ID seq_pvCreate(
 {
     CH_ID ch = sp->chan + chNum;
 
+    DEBUG("pvCreate: ef=%p\n", ef);
+
     assert(chNum < sp->numChans);
     ch->prog = sp;
     ch->varName = varName;

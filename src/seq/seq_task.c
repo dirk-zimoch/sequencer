@@ -180,6 +180,7 @@ static void ss_read_all_buffer(PROG *sp, SSCB *ss)
 {
 	unsigned nch;
 
+	DEBUG("ss_read_all_buffer\n");
 	for (nch = 0; nch < sp->numChans; nch++)
 	{
 		CHAN *ch = sp->chan + nch;
@@ -420,12 +421,12 @@ void ss_wakeup(PROG *sp, unsigned eventNum)
 
 		epicsMutexMustLock(sp->lock);
 		/* If event bit in mask is set, wake that state set */
-		DEBUG("ss_wakeup: eventNum=%d, mask=%u, state set=%d\n", eventNum, 
-			ss->mask? *ss->mask : 0, (int)ssNum(ss));
+		DEBUG("ss_wakeup: eventNum=%u, mask=%u, state set=%u\n", eventNum, 
+			ss->mask? *ss->mask : 0, nss);
 		if (eventNum == 0 || 
 			(ss->mask && bitTest(ss->mask, eventNum)))
 		{
-			DEBUG("ss_wakeup: waking up state set=%d\n", (int)ssNum(ss));
+			DEBUG("ss_wakeup: waking up state set=%u\n", nss);
 			epicsEventSignal(ss->syncSem); /* wake up ss thread */
 		}
 		epicsMutexUnlock(sp->lock);
