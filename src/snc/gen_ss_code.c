@@ -423,7 +423,7 @@ static void gen_statement(
 		gen_code("%s\n", ep->token.str);
 		break;
 	default:
-		error_at_node(ep, "unhandled expression (%s:%s)\n",
+		error_at_node(ep, "unhandled syntax node (%s:%s)\n",
 			node_name(ep), ep->token.str);
 		assert(impossible);
 	}
