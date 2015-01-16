@@ -171,7 +171,7 @@ void register_builtins(SymTable st, Node *scope)
                                                 mk_def_param("timeout", doubleT, defaultTimeout));
     fins1("pvGetComplete",      seqBoolT,       mk_param("channel", pvT));
     fins4("pvArrayGetComplete", seqBoolT,       mk_param("channel", pvPtrT),
-                                                mk_def_param("num_elems", unsignedT, defaultNumElems),
+                                                mk_param("num_elems", unsignedT),
                                                 mk_def_param("any", seqBoolT, defaultAll),
                                                 mk_def_param("done", seqBoolPtrT, defaultNull));
     fins4("pvPutComplete",      seqBoolT,       mk_param("channel", pvT),
@@ -179,25 +179,25 @@ void register_builtins(SymTable st, Node *scope)
                                                 mk_def_param("any", seqBoolT, defaultAll),
                                                 mk_def_param("done", seqBoolPtrT, defaultNull));
     fins4("pvArrayPutComplete", seqBoolT,       mk_param("channel", pvPtrT),
-                                                mk_def_param("num_elems", unsignedT, defaultNumElems),
+                                                mk_param("num_elems", unsignedT),
                                                 mk_def_param("any", seqBoolT, defaultAll),
                                                 mk_def_param("done", seqBoolPtrT, defaultNull));
     fins1("pvGetCancel",        pvStatT,        mk_param("channel", pvT));
     fins2("pvArrayGetCancel",   pvStatT,        mk_param("channel", pvPtrT),
-                                                mk_def_param("num_elems", unsignedT, defaultNumElems));
+                                                mk_param("num_elems", unsignedT));
     fins1("pvPutCancel",        pvStatT,        mk_param("channel", pvT));
     fins2("pvArrayPutCancel",   pvStatT,        mk_param("channel", pvPtrT),
-                                                mk_def_param("num_elems", unsignedT, defaultNumElems));
+                                                mk_param("num_elems", unsignedT));
     fins2("pvAssign",           pvStatT,        mk_param("channel", pvT),
                                                 mk_param("pv_name", charConstPtrT));
     fins2("pvAssignSubst",      pvStatT,        mk_param("channel", pvT),
                                                 mk_param("pv_name", charConstPtrT));
     fins1("pvMonitor",          pvStatT,        mk_param("channel", pvT));
     fins2("pvArrayMonitor",     pvStatT,        mk_param("channel", pvPtrT),
-                                                mk_def_param("num_elems", unsignedT, defaultNumElems));
+                                                mk_param("num_elems", unsignedT));
     fins1("pvStopMonitor",      pvStatT,        mk_param("channel", pvT));
     fins2("pvArrayStopMonitor", pvStatT,        mk_param("channel", pvPtrT),
-                                                mk_def_param("num_elems", unsignedT, defaultNumElems));
+                                                mk_param("num_elems", unsignedT));
 
     /* pv info */
     fins1("pvName",             charPtrT,       mk_param("channel", pvT));
@@ -209,7 +209,7 @@ void register_builtins(SymTable st, Node *scope)
     fins1("pvAssigned",         pvStatT,        mk_param("channel", pvT));
     fins1("pvConnected",        seqBoolT,       mk_param("channel", pvT));
     fins2("pvArrayConnected",   seqBoolT,       mk_param("channel", pvT),
-                                                mk_def_param("num_elems", unsignedT, defaultNumElems));
+                                                mk_param("num_elems", unsignedT));
     fins1("pvIndex",            pvStatT,        mk_param("channel", pvT));
 
     /* global operations */
