@@ -444,19 +444,13 @@ static void analyse_declaration(SymTable st, ChanList *chan_list, Node *scope, N
 	{
 		Var *vp2 = (Var *)sym_table_lookup(st, vp->name, var_list);
 
-		/* Note: functions can be declared more than once */
-		/* We let the C compiler check that they are consistent */
-		if (vp2->type->tag != T_FUNCTION)
-		{
-			if (vp2->decl)
-				error_at_node(defn,
-				 "variable '%s' already declared at %s:%d\n",
-				 vp->name, vp2->decl->token.file, vp2->decl->token.line);
-			else
-				error_at_node(defn,
-				 "variable '%s' already (implicitly) declared\n",
-				 vp->name);
-		}
+		if (vp2->decl)
+			error_at_node(defn,
+			 "'%s' already declared at %s:%d\n",
+			 vp->name, vp2->decl->token.file, vp2->decl->token.line);
+		else
+			error_at_node(defn,
+			 "'%s' already (implicitly) declared\n", vp->name);
 	}
 	else
 	{
