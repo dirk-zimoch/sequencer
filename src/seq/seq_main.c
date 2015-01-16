@@ -354,6 +354,7 @@ void seq_free(PROG *sp)
 			free(ch->dbch->dbName);
 			free(ch->dbch);
 		}
+		epicsMutexDestroy(ch->varLock);
 	}
 	free(sp->chan);
 	free(sp->eventFlags);
