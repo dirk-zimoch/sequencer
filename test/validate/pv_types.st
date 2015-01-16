@@ -102,7 +102,7 @@ exit {
 void pvSetInt(int pv x, int v)
 {
     x = v;
-    %%testDiag("pvSetInt(): seqg_chid_x=%d, v=%d", seqg_chid_x, v);
+    %%testDiag("pvSetInt(): seqg_chid_x=%p, v=%d", seqg_chid_x, v);
     pvPut(x);
 }
 
