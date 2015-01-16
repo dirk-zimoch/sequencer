@@ -1291,7 +1291,12 @@ static int connect_variable(Node *ep, Node *scope, void *parg)
 		Node *builtin_const = lookup_builtin_const(st, ep->token.str);
 		if (builtin_const)
 		{
+			Node *next = ep->next;
+			Node *last = ep->last;
 			*ep = *builtin_const;
+			/* restore next and last members */
+			ep->next = next;
+			ep->last = last;
 			return FALSE;
 		}
 
