@@ -358,7 +358,7 @@ static void ss_entry(void *arg)
 				unsigned i;
 				for (i = 0; i < NWORDS(sp->numEvFlags); i++)
 				{
-					sp->evFlags[i] &= ~ss->mask[i];
+					sp->events[i] &= ~ss->mask[i];
 				}
 			}
 			if (!ev_trig)

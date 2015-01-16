@@ -195,7 +195,7 @@ struct program_instance
 	/* dynamic program data (assigned at runtime) */
 	epicsMutexId	lock;	/* mutex for locking dynamic program data */
 	/* the following six members must always be protected by lock */
-	bitMask		*evFlags;	/* event bits for event flags & channels */
+	bitMask		*events;	/* event bits for event flags & channels */
 	EVFLAG		*eventFlags;	/* array of event flag structures */
 	unsigned	assignCount;	/* number of channels assigned to ext. pv */
 	unsigned	connectCount;	/* number of channels connected */

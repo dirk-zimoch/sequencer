@@ -178,8 +178,8 @@ static boolean init_sprog(PROG *sp, seqProgram *seqProg)
 	   *not* reserve space for all event numbers (i.e. including
 	   channels), only for event flags. The + 1 is for the zero dummy event. */
 	assert(NWORDS(sp->numEvFlags) > 0);
-	sp->evFlags = newArray(bitMask, NWORDS(sp->numEvFlags + 1));
-	if (!sp->evFlags)
+	sp->events = newArray(bitMask, NWORDS(sp->numEvFlags + 1));
+	if (!sp->events)
 	{
 		errlogSevPrintf(errlogFatal, "init_sprog: calloc failed\n");
 		return FALSE;
@@ -368,7 +368,7 @@ void seq_free(PROG *sp)
 		seqQueueDestroy(sp->queues[nq]);
 	free(sp->queues);
 
-	free(sp->evFlags);
+	free(sp->events);
 	if (optTest(sp, OPT_REENT)) free(sp->var);
 	free(sp);
 }

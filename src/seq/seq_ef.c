@@ -11,9 +11,9 @@ epicsShareFunc evflag seq_efCreate(PROG_ID sp, unsigned ef_num, unsigned val)
     assert(ef_num > 0 && ef_num <= sp->numEvFlags);
     epicsMutexMustLock(sp->lock);
     if (val)
-        bitSet(sp->evFlags, ef_num);
+        bitSet(sp->events, ef_num);
     else
-        bitClear(sp->evFlags, ef_num);
+        bitClear(sp->events, ef_num);
     epicsMutexUnlock(sp->lock);
     /* allocate the set of channel numbers synced to this event flag */
     r->synced = newArray(bitMask, NWORDS(sp->numChans));
@@ -67,7 +67,7 @@ epicsShareFunc void seq_efSet(SS_ID ss, evflag ev_flag)
 
     assert(efNum > 0 && efNum <= sp->numEvFlags);
     epicsMutexMustLock(sp->lock);
-    bitSet(sp->evFlags, efNum);
+    bitSet(sp->events, efNum);
     ss_wakeup(sp, efNum);
     epicsMutexUnlock(sp->lock);
 }
@@ -84,7 +84,7 @@ epicsShareFunc boolean seq_efTest(SS_ID ss, evflag ev_flag)
 
     assert(efNum > 0 && efNum <= sp->numEvFlags);
     epicsMutexMustLock(sp->lock);
-    isSet = bitTest(sp->evFlags, efNum);
+    isSet = bitTest(sp->events, efNum);
     if (isSet && optTest(sp, OPT_SAFE))
         ss_read_buffer_selective(sp, ss, ev_flag);
     epicsMutexUnlock(sp->lock);
@@ -102,8 +102,8 @@ epicsShareFunc boolean seq_efClear(SS_ID ss, evflag ev_flag)
 
     assert(efNum > 0 && efNum <= sp->numEvFlags);
     epicsMutexMustLock(sp->lock);
-    isSet = bitTest(sp->evFlags, efNum);
-    bitClear(sp->evFlags, efNum);
+    isSet = bitTest(sp->events, efNum);
+    bitClear(sp->events, efNum);
     ss_wakeup(sp, efNum);
     epicsMutexUnlock(sp->lock);
     return isSet;
@@ -120,8 +120,8 @@ epicsShareFunc boolean seq_efTestAndClear(SS_ID ss, evflag ev_flag)
 
     assert(efNum > 0 && efNum <= sp->numEvFlags);
     epicsMutexMustLock(sp->lock);
-    isSet = bitTest(sp->evFlags, efNum);
-    bitClear(sp->evFlags, efNum);
+    isSet = bitTest(sp->events, efNum);
+    bitClear(sp->events, efNum);
     if (isSet && optTest(sp, OPT_SAFE))
         ss_read_buffer_selective(sp, ss, ev_flag);
     epicsMutexUnlock(sp->lock);

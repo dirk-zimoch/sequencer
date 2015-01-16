@@ -1034,7 +1034,7 @@ epicsShareFunc boolean seq_pvGetQ(SS_ID ss, CH_ID ch)
 		/* If queue is now empty, clear the event flag */
 		if (seqQueueIsEmpty(ch->queue))
 		{
-			bitClear(sp->evFlags, ev_flag - sp->eventFlags);
+			bitClear(sp->events, ev_flag - sp->eventFlags);
 		}
 		epicsMutexUnlock(sp->lock);
 	}
@@ -1057,7 +1057,7 @@ epicsShareFunc void seq_pvFlushQ(SS_ID ss, CH_ID ch)
 
 	epicsMutexMustLock(sp->lock);
 	/* Clear event flag */
-	bitClear(sp->evFlags, ev_flag - sp->eventFlags);
+	bitClear(sp->events, ev_flag - sp->eventFlags);
 	epicsMutexUnlock(sp->lock);
 }
 
