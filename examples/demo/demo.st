@@ -6,22 +6,6 @@ in the file LICENSE that is included with this distribution.
 
 #define PRINTF errlogPrintf
 
-/* message system choice */
-#ifdef KTL
-
-#define PVSYS    "pvsys=ktl"
-
-#define LIGHT    "{prefix}.light"
-#define LIGHTON  "{prefix}.lighton"
-#define LIGHTOFF "{prefix}.lightoff"
-#define VOLTAGE  "{prefix}.voltage"
-#define LOLIMIT  "{prefix}.lolimit"
-#define HILIMIT  "{prefix}.hilimit"
-
-#else
-
-#define PVSYS    "pvsys=ca"
-
 #define LIGHT    "{prefix}:light"
 #define LIGHTON  "{prefix}:lightOn"
 #define LIGHTOFF "{prefix}:lightOff"
@@ -29,9 +13,7 @@ in the file LICENSE that is included with this distribution.
 #define LOLIMIT  "{prefix}:loLimit"
 #define HILIMIT  "{prefix}:hiLimit"
 
-#endif
-
-program demo( PVSYS )
+program demo
 
 %%#include "errlog.h"
 

@@ -2,16 +2,15 @@
 This file is distributed subject to a Software License Agreement found
 in the file LICENSE that is included with this distribution.
 \*************************************************************************/
-/* Demo Unix/KTL EPICS sequencer for John G (doesn't do anything useful) */
+/* Demo EPICS sequencer for John G (doesn't do anything useful) */
 
-/* select KTL message system */
-program johng/* ( "pvsys=ktl" ) */
+program johng
 
 /* These variable could all be local to state set utc. */
 
 /* associate "utc" variable with keyword and monitor it */
 double  utc;
-assign  utc to "dcs0.utc";
+assign  utc to "dcs0:utc";
 monitor utc;
 
 /* arrange to set event flag on "utc" monitor delivery */
@@ -20,7 +19,7 @@ sync    utc utcFlag;
 
 /* associate "telfocus" variable with keyword and monitor it */
 double  telfocus;
-assign  telfocus to "dcs0.telfocus";
+assign  telfocus to "dcs0:telfocus";
 monitor telfocus;
 
 /* just to test initialization of a global variable */
