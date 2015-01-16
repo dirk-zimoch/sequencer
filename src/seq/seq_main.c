@@ -362,6 +362,7 @@ void seq_free(PROG *sp)
 		}
 	}
 	free(sp->chan);
+	free(sp->eventFlags);
 
 	for (nq = 0; nq < sp->numQueues; nq++)
 		seqQueueDestroy(sp->queues[nq]);
