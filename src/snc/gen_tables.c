@@ -236,7 +236,7 @@ static void gen_state_event_mask(Node *sp, uint num_event_flags,
 #ifdef DEBUG
 	report("event mask for state %s is", sp->token.str);
 	for (n = 0; n < num_event_words; n++)
-		report(" 0x%lx", event_words[n]);
+		report(" 0x%lx", (unsigned long)event_words[n]);
 	report("\n");
 #endif
 }
@@ -251,7 +251,11 @@ static int iter_event_mask_scalar(Node *ep, Node *scope, void *parg)
 	Var		*vp;
 	uint		num_event_flags = em_args->num_event_flags;
 	seqMask		*event_words = em_args->event_words;
+	Type		*t;
 
+#ifdef DEBUG
+	report("  iter_event_mask_scalar: enter\n");
+#endif
 	assert(ep->tag == E_VAR);
 	vp = ep->extra.e_var;
 	assert(vp != 0);
@@ -265,15 +269,25 @@ static int iter_event_mask_scalar(Node *ep, Node *scope, void *parg)
 		bitSet(event_words, vp->chan.evflag->index);
 		return FALSE;		/* no children anyway */
 	}
-	if (vp->type->tag != T_PRIM)
+#ifdef DEBUG
+	report("  iter_event_mask_scalar: name=%s, type=\n", vp->name);
+	dump_type(vp->type, 2);
+	report("    assign=%d\n", vp->assign);
+#endif
+	t = type_contains_pv(vp->type);
+#ifdef DEBUG
+	report("    type_under_pv=\n");
+	if (t)
+		dump_type(t, 2);
+#endif
+	if (!t || strip_pv_type(t)->tag != T_PRIM)
 		return FALSE;		/* no children anyway */
-
-	assert(vp->type->tag == T_PRIM);
 
 	/* if not associated with channel, return */
 	if (vp->assign == M_NONE)
 		return FALSE;
-	assert(vp->assign == M_SINGLE);		/* by L3 */
+	if (vp->assign != M_SINGLE)	/* what about by L3? */
+		return FALSE;
 	cp = vp->chan.single;
 
 	bitSet(event_words, bitnum(vp->index,cp->index,num_event_flags));
@@ -295,6 +309,9 @@ static int iter_event_mask_array(Node *ep, Node *scope, void *parg)
 	Var		*vp=0;
 	Node		*e_var=0, *e_ix=0;
 
+#ifdef DEBUG
+	report("  iter_event_mask_array: enter\n");
+#endif
 	assert(ep->tag == E_SUBSCR || ep->tag == E_VAR);
 
 	if (ep->tag == E_SUBSCR)
