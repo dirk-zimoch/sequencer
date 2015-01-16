@@ -14,23 +14,24 @@ in the file LICENSE that is included with this distribution.
  */
 static PVTYPE pv_type_map[] =
 {
-	{ P_CHAR,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(char)		},
-	{ P_UCHAR,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(unsigned char)	},
-	{ P_SHORT,	pvTypeSHORT,	pvTypeTIME_SHORT,	sizeof(short)		},
-	{ P_USHORT,	pvTypeSHORT,	pvTypeTIME_SHORT,	sizeof(unsigned short)	},
-	{ P_INT,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(int)		},
-	{ P_UINT,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(unsigned int)	},
-	{ P_LONG,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(long)		},
-	{ P_ULONG,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(unsigned long)	},
-	{ P_INT8T,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(epicsInt8)	},
-	{ P_UINT8T,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(epicsUInt8)	},
-	{ P_INT16T,	pvTypeSHORT,	pvTypeTIME_SHORT,	sizeof(epicsInt16)	},
-	{ P_UINT16T,	pvTypeSHORT,	pvTypeTIME_SHORT,	sizeof(epicsUInt16)	},
-	{ P_INT32T,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(epicsInt32)	},
-	{ P_UINT32T,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(epicsUInt32)	},
-	{ P_FLOAT,	pvTypeFLOAT,	pvTypeTIME_FLOAT,	sizeof(float)		},
-	{ P_DOUBLE,	pvTypeDOUBLE,	pvTypeTIME_DOUBLE,	sizeof(double)		},
-	{ P_STRING,	pvTypeSTRING,	pvTypeTIME_STRING,	sizeof(string)		},
+    /* tag          putType         getType             size                    */
+    { P_CHAR,       pvTypeCHAR,     pvTypeTIME_CHAR,    sizeof(char)            },
+    { P_UCHAR,      pvTypeCHAR,     pvTypeTIME_CHAR,    sizeof(unsigned char)   },
+    { P_SHORT,      pvTypeSHORT,    pvTypeTIME_SHORT,   sizeof(short)           },
+    { P_USHORT,     pvTypeSHORT,    pvTypeTIME_SHORT,   sizeof(unsigned short)  },
+    { P_INT,        pvTypeLONG,     pvTypeTIME_LONG,    sizeof(int)             },
+    { P_UINT,       pvTypeLONG,     pvTypeTIME_LONG,    sizeof(unsigned int)    },
+    { P_LONG,       pvTypeLONG,     pvTypeTIME_LONG,    sizeof(long)            },
+    { P_ULONG,      pvTypeLONG,     pvTypeTIME_LONG,    sizeof(unsigned long)   },
+    { P_INT8T,      pvTypeCHAR,     pvTypeTIME_CHAR,    sizeof(epicsInt8)       },
+    { P_UINT8T,     pvTypeCHAR,     pvTypeTIME_CHAR,    sizeof(epicsUInt8)      },
+    { P_INT16T,     pvTypeSHORT,    pvTypeTIME_SHORT,   sizeof(epicsInt16)      },
+    { P_UINT16T,    pvTypeSHORT,    pvTypeTIME_SHORT,   sizeof(epicsUInt16)     },
+    { P_INT32T,     pvTypeLONG,     pvTypeTIME_LONG,    sizeof(epicsInt32)      },
+    { P_UINT32T,    pvTypeLONG,     pvTypeTIME_LONG,    sizeof(epicsUInt32)     },
+    { P_FLOAT,      pvTypeFLOAT,    pvTypeTIME_FLOAT,   sizeof(float)           },
+    { P_DOUBLE,     pvTypeDOUBLE,   pvTypeTIME_DOUBLE,  sizeof(double)          },
+    { P_STRING,     pvTypeSTRING,   pvTypeTIME_STRING,  sizeof(string)          },
 };
 
 epicsShareFunc CH_ID seq_pvCreate(
@@ -43,8 +44,8 @@ epicsShareFunc CH_ID seq_pvCreate(
     unsigned    count,          /* element count for arrays */
     evflag      ef,             /* event flag if synced */
     seqBool     monitored,      /* whether channel should be monitored */
-    unsigned    queueSize,      /* syncQ queue size (0=not queued) */
-    unsigned    queueIndex)     /* syncQ queue index */
+    unsigned    queueSize,      /* queue size (0=not queued) */
+    unsigned    queueIndex)     /* queue index */
 {
     CH_ID ch = sp->chan + chNum;
 
@@ -66,6 +67,7 @@ epicsShareFunc CH_ID seq_pvCreate(
 
     /* Fill in request type info */
     ch->type = pv_type_map + varType;
+    assert(ch->type->tag == varType);
 
     if (chName) {              /* skip anonymous PVs */
         char name_buffer[100];

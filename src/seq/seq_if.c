@@ -378,7 +378,8 @@ static void *putq_cp(void *dest, const void *src, size_t elemSize)
 	struct putq_cp_arg *arg = (struct putq_cp_arg *)src;
 	CHAN *ch = arg->ch;
 
-	return memcpy(pv_value_ptr(dest, ch->type->getType), /*BUG? should that be putType?*/
+	/* Note: we use ch->type->getType for all queue operations */
+	return memcpy(pv_value_ptr(dest, ch->type->getType),
 		arg->var, ch->type->size * ch->count);
 }
 
@@ -390,7 +391,8 @@ static void anonymous_put(SS_ID ss, CHAN *ch)
 	if (ch->queue)
 	{
 		QUEUE queue = ch->queue;
-		pvType type = ch->type->getType; /*BUG? should that be putType?*/
+		/* Note: we use ch->type->getType for all queue operations */
+		pvType type = ch->type->getType;
 		size_t size = ch->type->size;
 		boolean full;
 		struct putq_cp_arg arg = {ch, var};
