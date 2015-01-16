@@ -70,6 +70,9 @@ Type *type_of(Node *e)
     dump_expr(e, 1);
 #endif
 
+    if (e->type)
+        return e->type;
+
     switch (e->tag) {
     case E_ASSOP:                       /* assignment operator [left,right] */
         l = type_of(e->assop_left);
@@ -78,7 +81,7 @@ Type *type_of(Node *e)
         case TOK_ADDEQ:
         case TOK_SUBEQ:
             if (type_is_pointer(l) && !type_is_pointer(r)) {
-                return l;
+                return e->type = l;
             }
             if (!type_is_pointer(l) && type_is_pointer(r)) {
                 return r;
@@ -89,10 +92,10 @@ Type *type_of(Node *e)
             /* fall through */
         default:
             if (l->tag == T_FOREIGN || r->tag == T_FOREIGN)
-                return no_type;
+                return e->type = no_type;
             if (l->tag == T_NONE || r->tag == T_NONE)
-                return no_type;
-            return strip_pv_type(l);
+                return e->type = no_type;
+            return e->type = strip_pv_type(l);
             break;
         }
         break;
@@ -103,13 +106,14 @@ Type *type_of(Node *e)
         case TOK_SUB:
         case TOK_ADD:
             if (type_is_pointer(l) && !type_is_pointer(r)) {
-                return l;
+                return e->type = l;
             }
             if (!type_is_pointer(l) && type_is_pointer(r)) {
-                return r;
+                return e->type = r;
             }
             if (type_is_pointer(l) && type_is_pointer(r)) {
-                return error_at_node(e, "invalid operands of binary %s", e->token.str), no_type;
+                error_at_node(e, "invalid operands of binary %s", e->token.str);
+                return e->type = no_type;
             }
             /* fall through */
         case TOK_ASTERISK:
@@ -129,61 +133,61 @@ Type *type_of(Node *e)
         case TOK_AMPERSAND:
         case TOK_MOD:
             if (l->tag == T_FOREIGN || r->tag == T_FOREIGN)
-                return no_type;
+                return e->type = no_type;
             if (l->tag == T_NONE || r->tag == T_NONE)
-                return no_type;
-            return num_type;
+                return e->type = no_type;
+            return e->type = num_type;
         case TOK_COMMA:
-            return strip_pv_type(r);
+            return e->type = strip_pv_type(r);
         }
     case E_CAST:                        /* type cast [type,operand] */
         assert(e->cast_type);
         assert(e->cast_type->extra.e_decl);
-        return e->cast_type->extra.e_decl->type;
+        return e->type = e->cast_type->extra.e_decl->type;
     case E_CONST:                       /* numeric (inkl. character) constant [] */
-        return num_type;
+        return e->type = num_type;
     case E_FUNC:                        /* function call [expr,args] */
         t = type_of(e->func_expr);
         if (t->tag == T_FUNCTION) {
-            return t->val.function.return_type;
+            return e->type = t->val.function.return_type;
         } else {
-            return no_type;
+            return e->type = no_type;
         }
     case E_INIT:                        /* array or struct initializer [elems] */
-        return no_type;
+        return e->type = no_type;
     case E_MEMBER:                      /* struct or union member [] */
         assert(impossible);             /* handled in case E_SELECT */
-        return no_type;
+        return e->type = no_type;
     case E_PAREN:                       /* parenthesis around an expression [expr] */
-        return type_of(e->paren_expr);
+        return e->type = type_of(e->paren_expr);
     case E_POST:                        /* unary postfix operator [operand] */
-        return type_of(e->post_operand);
+        return e->type = type_of(e->post_operand);
     case E_PRE:                         /* unary prefix operator [operand] */
         t = type_of(e->pre_operand);
         switch (e->token.symbol) {
         case TOK_ADD:
         case TOK_SUB:
-            return strip_pv_type(t);
+            return e->type = strip_pv_type(t);
         case TOK_ASTERISK:
             if (t->tag == T_POINTER) {
-                return t->val.pointer.value_type;
+                return e->type = t->val.pointer.value_type;
             } else if (t->tag == T_ARRAY) {
-                return t->val.array.elem_type;
+                return e->type = t->val.array.elem_type;
             } else if (t->tag == T_PRIM && t->val.prim == P_STRING) {
-                return char_type;
+                return e->type = char_type;
             } else {
-                return no_type;
+                return e->type = no_type;
             }
         case TOK_AMPERSAND:
-            return mk_pointer_type(t);
+            return e->type = mk_pointer_type(t);
         case TOK_NOT:
         case TOK_TILDE:
-            return num_type;
+            return e->type = num_type;
         case TOK_INCR:
         case TOK_DECR:
-            return strip_pv_type(t);
+            return e->type = strip_pv_type(t);
         case TOK_SIZEOF:
-            return num_type;
+            return e->type = num_type;
         }
     case E_SELECT:                      /* member selection [left,right] */
         t = type_of(e->select_left);
@@ -192,46 +196,47 @@ Type *type_of(Node *e)
             if (t->tag == T_POINTER)
                 t = t->val.pointer.value_type;
             else
-                return no_type;
+                return e->type = no_type;
             /* fall through */
         case TOK_PERIOD:
             if (t->tag == T_STRUCT)
-                return member_type(t->val.structure.member_decls, e->select_right->token.str);
+                return e->type = member_type(t->val.structure.member_decls, e->select_right->token.str);
             else
-                return no_type;
+                return e->type = no_type;
         default:
             assert(impossible);
-            return no_type;
+            return e->type = no_type;
         }
     case E_SIZEOF:                      /* sizeof [decl] */
-        return num_type;
+        return e->type = num_type;
     case E_STRING:                      /* string constant [] */
-        return mk_pointer_type(mk_const_type(char_type));
+        return e->type = mk_pointer_type(mk_const_type(char_type));
     case E_SUBSCR:                      /* subscripted expr [operand,index] */
         t = strip_pv_type(type_of(e->subscr_operand));
         switch (t->tag) {
         case T_ARRAY:
-            return t->val.array.elem_type;
+            return e->type = t->val.array.elem_type;
         case T_POINTER:
-            return t->val.pointer.value_type;
+            return e->type = t->val.pointer.value_type;
         case T_PRIM:
             if (t->val.prim == P_STRING)
-                return char_type;
+                return e->type = char_type;
             else
-                return no_type;
+                return e->type = no_type;
         default:
-            return error_at_node(e->subscr_operand, "subscript operand has wrong type\n"), no_type;
+            error_at_node(e->subscr_operand, "subscript operand has wrong type\n");
+            return e->type = no_type;
         }
     case E_TERNOP:                      /* ternary operator [cond,then,else] */
-        return type_of(e->ternop_then);
+        return e->type = type_of(e->ternop_then);
     case E_VAR:                         /* variable [] */
         if (!e->extra.e_var)
-            return mk_no_type();
+            return e->type = mk_no_type();
         else
-            return e->extra.e_var->type;
+            return e->type = e->extra.e_var->type;
     default:
         error_at_node(e, "unexpected expression type %s\n", node_name(e));
         assert(impossible);
-        return no_type;
+        return e->type = no_type;
     }
 }

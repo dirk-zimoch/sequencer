@@ -182,6 +182,7 @@ struct syntax_node			/* generic syntax node */
 		VarList *e_funcdef;	/* parameters */
 		Type	*e_cast;	/* the type to cast to */
 	}	extra;
+	Type		*type;		/* type of an expression */
 };
 
 struct event_flag
