@@ -84,6 +84,7 @@ typedef struct pvreq		PVREQ;
 typedef const struct pv_type	PVTYPE;
 typedef struct pv_meta_data	PVMETA;
 typedef struct event_flag	EVFLAG;
+typedef enum prim_type_tag	PTYPE;
 
 typedef struct seqg_vars        SEQ_VARS;
 
@@ -110,7 +111,7 @@ struct channel
 
 struct pv_type
 {
-	enum prim_type_tag tag;
+	PTYPE		tag;
 	pvType		putType;
 	pvType		getType;
 	size_t		size;

@@ -39,7 +39,7 @@ epicsShareFunc CH_ID seq_pvCreate(
     const char  *chName,        /* assigned channel name */
     size_t      offset,         /* offset to value */
     const char  *varName,       /* variable name, including subscripts*/
-    enum prim_type_tag varType, /* variable (base) type */
+    PTYPE       varType,        /* variable (base) type */
     unsigned    count,          /* element count for arrays */
     evflag      ef,             /* event flag if synced */
     seqBool     monitored,      /* whether channel should be monitored */
