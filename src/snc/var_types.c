@@ -492,6 +492,8 @@ void dump_type(Type *t, int l)
     case T_NONE:
     case T_EVFLAG:
     case T_VOID:
+        report("\n");
+        break;
     case T_PRIM:
         report(" %s\n", prim_type_tag_name[t->val.prim]);
         break;
