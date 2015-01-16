@@ -35,9 +35,6 @@ typedef struct event_mask_args {
 	uint	num_event_flags;
 } event_mask_args;
 
-#if 0
-static void gen_channel(Chan *cp, uint num_event_flags, int opt_reent);
-#endif
 static void gen_state_table(Node *ss_list, uint num_event_flags, uint num_channels);
 static void fill_state_struct(Node *sp, char *ss_name, uint ss_num);
 static void gen_prog_table(Program *p);
@@ -57,131 +54,6 @@ void gen_tables(Program *p)
 	gen_ss_table(p->prog->prog_statesets);
 	gen_prog_table(p);
 }
-
-#if 0
-/* Generate channel table with data for each defined channel */
-void gen_channel_table(ChanList *chan_list, uint num_event_flags, int opt_reent)
-{
-	Chan *cp;
-
-	if (chan_list->first)
-	{
-		gen_code("\n/* Channel table */\n");
-		gen_code("static seqChan " NM_CHANS "[] = {\n");
-		gen_code("\t/* chName, offset, varName, varType, count, eventNum, efId, monitored, queueSize, queueIndex */\n");
-		foreach (cp, chan_list->first)
-		{
-			gen_channel(cp, num_event_flags, opt_reent);
-			gen_code(",\n");
-		}
-		gen_code("};\n");
-	}
-	else
-	{
-		gen_code("\n/* No channel definitions */\n");
-		gen_code("#define " NM_CHANS " 0\n");
-	}
-}
-
-static void gen_var_name(Var *vp)
-{
-	if (vp->scope->tag == D_PROG)
-	{
-		gen_code("%s", vp->name);
-	}
-	else if (vp->scope->tag == D_SS)
-	{
-		gen_code("%s_%s.%s", NM_VARS, vp->scope->token.str, vp->name);
-	}
-	else if (vp->scope->tag == D_STATE)
-	{
-		gen_code("%s_%s.%s_%s.%s", NM_VARS,
-			vp->scope->extra.e_state->var_list->parent_scope->token.str,
-			NM_VARS, vp->scope->token.str, vp->name);
-	}
-}
-
-/* Generate a seqChan structure */
-static void gen_channel(Chan *cp, uint num_event_flags, int opt_reent)
-{
-	Var		*vp = cp->var;
-	char		elem_str[20] = "";
-	uint		ef_num;
-	Type		*basetype = base_type(vp->type);
-
-	if (basetype->tag == T_PRIM)
-	{
-		enum prim_type_tag type = basetype->val.prim;
-		if (type == P_LONG || type == P_ULONG)
-		{
-			gen_code(
-"#if LONG_MAX > 0x7fffffffL\n"
-			);
-			gen_line_marker(vp->decl);
-			gen_code(
-"#error variable '"
-			);
-			gen_var_decl(vp);
-			gen_code("'"
-" cannot be assigned to a PV (on the chosen target system)\\\n"
-" because Channel Access does not support integral types longer than 4 bytes.\\\n"
-" You can use '%s' instead, or the fixed size type '%s'.\n"
-"#endif\n",
-				type == P_LONG ? "int" : "unsigned int",
-				type == P_LONG ? "int32_t" : "uint32_t"
-			);
-		}
-	}
-
-	if (vp->assign == M_MULTI)
-		sprintf(elem_str, "[%d]", cp->index);
-
-	if (cp->sync)
-		ef_num = cp->sync->chan.evflag->index;
-	else
-		ef_num = 0;
-
-	if (!cp->name)
-		gen_code("\t{0, ");
-	else
-		gen_code("\t{\"%s\", ", cp->name);
-
-	if (opt_reent)
-	{
-		gen_code("offsetof(struct %s, ", NM_VARS);
-		gen_var_name(vp);
-		gen_code("%s), ", elem_str);
-	}
-	else
-	{
-		gen_code("(size_t)&");
-		gen_var_name(vp);
-		gen_code("%s, ", elem_str);
-	}
-
-	/* variable name with optional elem num */
-	gen_code("\"%s%s\", ", vp->name, elem_str);
-	/* variable type */
-	assert(base_type(vp->type)->tag == T_PRIM);
-	gen_code("%s, ", prim_type_tag_name[base_type(vp->type)->val.prim]);
-	/* count, for requests */
-	gen_code("%d, ", cp->count);
-	/* event number */
-	gen_code("%d, ", num_event_flags + vp->index + cp->index + 1);
-	/* event flag number (or 0) */
-	gen_code("%d, ", ef_num);
-	/* monitor flag */
-	gen_code("%d, ", cp->monitor);
-	/* syncQ queue */
-	if (!cp->syncq)
-		gen_code("0, 0");
-	else if (!cp->syncq->size)
-		gen_code("DEFAULT_QUEUE_SIZE, %d", cp->syncq->index);
-	else
-		gen_code("%d, %d", cp->syncq->size, cp->syncq->index);
-	gen_code("}");
-}
-#endif
 
 /* Generate state event mask and table */
 static void gen_state_table(Node *ss_list, uint num_event_flags, uint num_channels)
@@ -294,9 +166,6 @@ static void gen_prog_table(Program *p)
 	gen_code("seqProgram %s = {\n", p->name);
 	gen_code("\t/* magic number */      %d,\n", MAGIC);
 	gen_code("\t/* program name */      \"%s\",\n", p->name);
-#if 0
-	gen_code("\t/* channels */          " NM_CHANS ",\n");
-#endif
 	gen_code("\t/* num. channels */     %d,\n", p->chan_list->num_elems);
 	gen_code("\t/* state sets */        " NM_STATESETS ",\n");
 	gen_code("\t/* num. state sets */   %d,\n", p->num_ss);

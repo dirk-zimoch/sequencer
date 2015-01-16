@@ -39,12 +39,6 @@ static int assert_var_declared(Node *ep, Node *scope, void *parg)
 #endif
 	assert(ep->tag == E_VAR);
 	assert(ep->extra.e_var != 0);
-#if 0
-	assert(ep->extra.e_var->decl != 0 ||
-		ep->extra.e_var->type->tag == T_NONE ||
-		
-	);
-#endif
 	return TRUE;		/* there are no children anyway */
 }
 
@@ -83,11 +77,6 @@ void generate_code(Program *p)
 
 	/* Variable declarations */
 	gen_var_struct(p->prog, p->options.reent);
-
-#if 0
-	gen_channel_table(p->chan_list, p->num_event_flags, p->options.reent);
-#endif
-
 
 	/* Function declarations */
 	gen_func_decls(p->prog);

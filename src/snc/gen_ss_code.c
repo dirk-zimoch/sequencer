@@ -187,20 +187,6 @@ static void gen_state_func(
 	gen_body(context, xp);
 }
 
-#if 0
-static void add_user_var_decl(Node *block)
-{
-	Token t;
-
-	assert(block->tag == S_CMPND);
-	t.type = TOK_CCODE;
-	t.str = "SEQ_VARS const* "NM_VAR" = (SEQ_VARS const*)seq_pVar("NM_SS");\n";
-	t.line = block->line_num;
-	t.file = block->src_file;
-	block->cmpnd_defns = link_expr(expr(T_TEXT, t), block->cmpnd_defns);
-}
-#endif
-
 static void gen_block(uint context, Type *return_type, Node *xp, int level)
 {
 	Node	*cxp;
@@ -895,10 +881,6 @@ static void gen_channel(uint context, Chan *cp)
 
 	/* element count for arrays */
 	gen_code("%d, ", cp->count);
-#if 0
-	/* event number for this channel */
-	gen_code("%d, ", num_event_flags + vp->index + cp->index + 1);
-#endif
 	/* event flag id if synced (or 0) */
 	if (cp->sync)
 		gen_var_access(context, cp->sync);
@@ -917,29 +899,6 @@ static void gen_channel(uint context, Chan *cp)
 		gen_code("%d, %d", cp->syncq->size, cp->syncq->index);
 	gen_code(");\n");
 }
-
-#if 0
-static void gen_chid_init(uint context, Var *vp, int level)
-{
-	assert(vp->decl);
-	if (vp->type->tag == T_PV)
-	{
-		indent(level);
-		gen_var_access(ctxSet(context,C_CHID), vp);
-		gen_code(" = %d;\n", vp->index);
-	}
-	else if (vp->type->tag == T_ARRAY)
-	{
-		int i;
-		for (i=0; i<vp->type->val.array.num_elems; i++)
-		{
-			indent(level);
-			gen_var_access(ctxSet(context,C_CHID), vp);
-			gen_code("[%d] = %d;\n", i, vp->index +i);
-		}
-	}
-}
-#endif
 
 /* Generate initializers for variables of global lifetime */
 static void gen_user_var_init(uint context, Node *prog, int level)
