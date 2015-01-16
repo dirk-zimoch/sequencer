@@ -5,8 +5,11 @@ option +r;
 int x;
 assign x;
 
+#if 0
+/* forward declarations no longer allowed in version 2.3 */
 /* forward declarations (not needed but allowed) */
 void pvSetX(int val);
+#endif
 
 ss simple {
     state simple {
