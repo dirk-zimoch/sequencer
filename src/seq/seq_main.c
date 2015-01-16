@@ -16,33 +16,6 @@ in the file LICENSE that is included with this distribution.
 
 static boolean init_sprog(PROG *sp, seqProgram *seqProg);
 static boolean init_sscb(PROG *sp, SSCB *ss, seqSS *seqSS);
-static boolean init_chan(PROG *sp, CHAN *ch, seqChan *seqChan);
-
-/*
- * types for DB put/get, element size based on user variable type.
- * pvTypeTIME_* types for gets/monitors return status, severity, and time stamp
- * in addition to the value.
- */
-static PVTYPE pv_type_map[] =
-{
-	{ P_CHAR,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(char)		},
-	{ P_UCHAR,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(unsigned char)	},
-	{ P_SHORT,	pvTypeSHORT,	pvTypeTIME_SHORT,	sizeof(short)		},
-	{ P_USHORT,	pvTypeSHORT,	pvTypeTIME_SHORT,	sizeof(unsigned short)	},
-	{ P_INT,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(int)		},
-	{ P_UINT,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(unsigned int)	},
-	{ P_LONG,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(long)		},
-	{ P_ULONG,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(unsigned long)	},
-	{ P_INT8T,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(epicsInt8)	},
-	{ P_UINT8T,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(epicsUInt8)	},
-	{ P_INT16T,	pvTypeSHORT,	pvTypeTIME_SHORT,	sizeof(epicsInt16)	},
-	{ P_UINT16T,	pvTypeSHORT,	pvTypeTIME_SHORT,	sizeof(epicsUInt16)	},
-	{ P_INT32T,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(epicsInt32)	},
-	{ P_UINT32T,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(epicsUInt32)	},
-	{ P_FLOAT,	pvTypeFLOAT,	pvTypeTIME_FLOAT,	sizeof(float)		},
-	{ P_DOUBLE,	pvTypeDOUBLE,	pvTypeTIME_DOUBLE,	sizeof(double)		},
-	{ P_STRING,	pvTypeSTRING,	pvTypeTIME_STRING,	sizeof(string)		},
-};
 
 /*
  * seq: Run a state program.
@@ -152,7 +125,7 @@ epicsShareFunc epicsThreadId epicsShareAPI seq(
  */
 static boolean init_sprog(PROG *sp, seqProgram *seqProg)
 {
-	unsigned nss, nch;
+	unsigned nss;
 
 	/* Copy information for state program */
 	sp->numSS = seqProg->numSS;
@@ -203,16 +176,16 @@ static boolean init_sprog(PROG *sp, seqProgram *seqProg)
 
 	/* Allocate an array for event flag bits. Note this does
 	   *not* reserve space for all event numbers (i.e. including
-	   channels), only for event flags. */
+	   channels), only for event flags. The + 1 is for the zero dummy event. */
 	assert(NWORDS(sp->numEvFlags) > 0);
-	sp->evFlags = newArray(bitMask, NWORDS(sp->numEvFlags));
+	sp->evFlags = newArray(bitMask, NWORDS(sp->numEvFlags + 1));
 	if (!sp->evFlags)
 	{
 		errlogSevPrintf(errlogFatal, "init_sprog: calloc failed\n");
 		return FALSE;
 	}
-	/* NOTE: event flags count from 1 upward */
-	sp->syncedChans = newArray(CHAN*, sp->numEvFlags+1);
+        /* Allocate the array of event flag structures */
+	sp->eventFlags = newArray(EVFLAG, sp->numEvFlags + 1);
 
 	/* Allocate and initialize syncQ queues */
 	if (sp->numQueues > 0)
@@ -248,7 +221,7 @@ static boolean init_sprog(PROG *sp, seqProgram *seqProg)
 			return FALSE;
 	}
 
-	/* Allocate array of channel structs and initialize it */
+	/* Allocate array of channel structs */
 	if (sp->numChans > 0)
 	{
 		sp->chan = newArray(CHAN, sp->numChans);
@@ -257,11 +230,6 @@ static boolean init_sprog(PROG *sp, seqProgram *seqProg)
 			errlogSevPrintf(errlogFatal, "init_sprog: calloc failed\n");
 			return FALSE;
 		}
-	}
-	for (nch = 0; nch < sp->numChans; nch++)
-	{
-		if (!init_chan(sp, sp->chan + nch, seqProg->chan + nch))
-			return FALSE;
 	}
 	return TRUE;
 }
@@ -356,113 +324,6 @@ static boolean init_sscb(PROG *sp, SSCB *ss, seqSS *seqSS)
 	return TRUE;
 }
 
-/*
- * Build the database channel structures.
- */
-static boolean init_chan(PROG *sp, CHAN *ch, seqChan *seqChan)
-{
-	DEBUG("init_chan: ch=%p\n", ch);
-	ch->prog = sp;
-	ch->varName = seqChan->varName;
-	ch->offset = seqChan->offset;
-	ch->count = seqChan->count;
-	if (ch->count == 0) ch->count = 1;
-	ch->syncedTo = seqChan->efId;
-	if (ch->syncedTo)
-	{
-		/* insert into syncedTo list for this event flag */
-		CHAN *fst = sp->syncedChans[ch->syncedTo];
-		sp->syncedChans[ch->syncedTo] = ch;
-		ch->nextSynced = fst;
-	}
-	ch->monitored = seqChan->monitored;
-	ch->eventNum = seqChan->eventNum;
-
-	/* Fill in request type info */
-	ch->type = pv_type_map + seqChan->varType;
-	assert(seqChan->varType == ch->type->tag);
-
-	DEBUG("  varname=%s, count=%u\n"
-		"  syncedTo=%u, monitored=%u, eventNum=%u\n",
-		ch->varName, ch->count,
-		ch->syncedTo, ch->monitored, ch->eventNum);
-	DEBUG("  type=%p: tag=%s, putType=%d, getType=%d, size=%d\n",
-		ch->type, prim_type_tag_name[ch->type->tag],
-		ch->type->putType, ch->type->getType, ch->type->size);
-
-	if (seqChan->chName)	/* skip anonymous PVs */
-	{
-		char name_buffer[100];
-
-		seqMacEval(sp, seqChan->chName, name_buffer, sizeof(name_buffer));
-		if (name_buffer[0])	/* skip anonymous PVs */
-		{
-			DBCHAN	*dbch = new(DBCHAN);
-			if (!dbch)
-			{
-				errlogSevPrintf(errlogFatal, "init_chan: calloc failed\n");
-				return FALSE;
-			}
-			dbch->dbName = epicsStrDup(name_buffer);
-			if (!dbch->dbName)
-			{
-				errlogSevPrintf(errlogFatal, "init_chan: epicsStrDup failed\n");
-				return FALSE;
-			}
-			ch->dbch = dbch;
-			sp->assignCount++;
-			if (ch->monitored)
-				sp->monitorCount++;
-			DEBUG("  assigned name=%s, expanded name=%s\n",
-				seqChan->chName, ch->dbch->dbName);
-		}
-	}
-
-	if (!ch->dbch)
-	{
-		DEBUG("  pv name=<anonymous>\n");
-	}
-
-	if (seqChan->queueSize)
-	{
-		/* We want to store the whole pv message in the queue,
-		   so that we can extract status etc when we remove
-		   the message. */
-		size_t size = pv_size_n(ch->type->getType, ch->count);
-		QUEUE *q = sp->queues + seqChan->queueIndex;
-
-		if (*q == NULL)
-		{
-			*q = seqQueueCreate(seqChan->queueSize, size);
-			if (!*q)
-			{
-				errlogSevPrintf(errlogFatal, "init_chan: seqQueueCreate failed\n");
-				return FALSE;
-			}
-		}
-		else if (seqQueueNumElems(*q) != seqChan->queueSize ||
-			 seqQueueElemSize(*q) != size)
-		{
-			errlogSevPrintf(errlogFatal,
-				"init_chan(varname=%s): inconsistent shared queue definitions\n",
-				seqChan->varName);
-			return FALSE;
-		}
-		ch->queue = *q;
-		DEBUG("  queueSize=%d, queueIndex=%d, queue=%p\n",
-			seqChan->queueSize, seqChan->queueIndex, ch->queue);
-		DEBUG("  queue->numElems=%d, queue->elemSize=%d\n",
-			seqQueueNumElems(ch->queue), seqQueueElemSize(ch->queue));
-	}
-	ch->varLock = epicsMutexCreate();
-	if (!ch->varLock)
-	{
-		errlogSevPrintf(errlogFatal, "init_chan: epicsMutexCreate failed\n");
-		return FALSE;
-	}
-	return TRUE;
-}
-
 /* Free all allocated memory in a program structure */
 void seq_free(PROG *sp)
 {
@@ -507,7 +368,6 @@ void seq_free(PROG *sp)
 	free(sp->queues);
 
 	free(sp->evFlags);
-	free(sp->syncedChans);
 	if (optTest(sp, OPT_REENT)) free(sp->var);
 	free(sp);
 }

@@ -55,9 +55,9 @@ typedef epicsUInt32 seqMask;				/* for event masks and options */
 #define NBITS			(8*sizeof(seqMask))	/* # bits in seqMask word */
 #define NWORDS(maxBitNum)	(1+(maxBitNum)/NBITS)	/* # words in seqMask */
 
-#define bitSet(words, bitnum)	( words[(bitnum)/NBITS] |=  (1u<<((bitnum)%NBITS)))
-#define bitClear(words, bitnum)	( words[(bitnum)/NBITS] &= ~(1u<<((bitnum)%NBITS)))
-#define bitTest(words, bitnum)	((words[(bitnum)/NBITS] &  (1u<<((bitnum)%NBITS))) != 0)
+#define bitSet(words, bitnum)	( (words)[(bitnum)/NBITS] |=  (1u<<((bitnum)%NBITS)))
+#define bitClear(words, bitnum)	( (words)[(bitnum)/NBITS] &= ~(1u<<((bitnum)%NBITS)))
+#define bitTest(words, bitnum)	(((words)[(bitnum)/NBITS] &  (1u<<((bitnum)%NBITS))) != 0)
 
 #ifndef TRUE
 #define TRUE	1
@@ -65,8 +65,6 @@ typedef epicsUInt32 seqMask;				/* for event masks and options */
 #ifndef FALSE
 #define FALSE	0
 #endif
-
-#define seq_pvValue(type,pvexpr) (*(type)(seqg_chans[pvexpr].offset+(size_t)seqg_var))
 
 typedef	struct program_instance *const PROG_ID;
 
@@ -76,24 +74,8 @@ typedef seqBool SEQ_EVENT_FUNC(SS_ID ssId, int *transNum, int *nextState);
 typedef void SEQ_SS_FUNC(SS_ID ssId);
 typedef void SEQ_PROG_FUNC(PROG_ID progId);
 
-typedef const struct seqChan seqChan;
 typedef const struct seqState seqState;
 typedef const struct seqSS seqSS;
-
-/* Static information about a channel */
-struct seqChan
-{
-	const char	*chName;	/* assigned channel name */
-	size_t		offset;		/* offset to value */
-	const char	*varName;	/* variable name, including subscripts*/
-	enum prim_type_tag varType;	/* variable (base) type */
-	unsigned	count;		/* element count for arrays */
-	unsigned	eventNum;	/* event number for this channel */
-	EF_ID		efId;		/* event flag id if synced */
-	seqBool		monitored;	/* whether channel should be monitored */
-	unsigned	queueSize;	/* syncQ queue size (0=not queued) */
-	unsigned	queueIndex;	/* syncQ queue index */
-};
 
 /* Static information about a state */
 struct seqState
@@ -120,7 +102,6 @@ struct seqProgram
 {
 	unsigned	magic;		/* magic number */
 	const char	*progName;	/* program name (for debugging) */
-	seqChan		*chan;		/* table of channels */
 	unsigned	numChans;	/* number of db channels */
 	seqSS		*ss;		/* array of state set info structs */
 	unsigned	numSS;		/* number of state sets */
@@ -134,29 +115,29 @@ struct seqProgram
 	unsigned	numQueues;	/* number of syncQ queues */
 };
 
-epicsShareFunc void seq_efInit(PROG_ID sp, EF_ID ev_flag, unsigned val);
+epicsShareFunc evflag seq_efCreate(PROG_ID sp, unsigned ef_num, unsigned val);
 epicsShareFunc void seq_exit(SS_ID);
+
+epicsShareFunc CH_ID seq_pvCreate(
+	struct program_instance	*sp,	/* program instance */
+	unsigned	chNum,		/* index of channel */
+	const char	*chName,	/* assigned channel name */
+	size_t		offset,		/* offset to value */
+	const char	*varName,	/* variable name, including subscripts*/
+	enum prim_type_tag varType,	/* variable (base) type */
+	unsigned	count,		/* element count for arrays */
+	evflag		ef,		/* event flag if synced */
+	seqBool		monitored,	/* whether channel should be monitored */
+	unsigned	queueSize,	/* syncQ queue size (0=not queued) */
+	unsigned	queueIndex);	/* syncQ queue index */
+
+epicsShareFunc size_t seq_pvOffset(CH_ID ch);
+
+#define seq_pvValue(type,ch) (*(type)(seq_pvOffset(ch)+(size_t)seqg_var))
 
 /* called by generated main and registrar routines */
 epicsShareFunc void seqRegisterSequencerProgram(seqProgram *p);
 epicsShareFunc void seqRegisterSequencerCommands(void);
-
-/*
- * These function prototypes are intentionally left out of the public API in
- * seqCom.h. They will be moved there in version 2.3 with slightly modified
- * types. You may use them in embedded C code but your programs will no longer
- * work when upgrading to 2.3.
- */
-epicsShareFunc seqBool seq_pvArrayGetComplete(SS_ID, CH_ID,
-	unsigned, seqBool, seqBool*);
-epicsShareFunc seqBool seq_pvArrayPutComplete(SS_ID, CH_ID,
-	unsigned, seqBool, seqBool*);
-epicsShareFunc void seq_pvArrayGetCancel(SS_ID, CH_ID, unsigned);
-epicsShareFunc void seq_pvArrayPutCancel(SS_ID, CH_ID, unsigned);
-epicsShareFunc pvStat seq_pvArrayMonitor(SS_ID, CH_ID, unsigned);
-epicsShareFunc pvStat seq_pvArrayStopMonitor(SS_ID, CH_ID, unsigned);
-epicsShareFunc void seq_pvArraySync(SS_ID, CH_ID, unsigned, EF_ID);
-epicsShareFunc seqBool seq_pvArrayConnected(SS_ID ss, CH_ID chId, unsigned length);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -57,8 +57,8 @@ typedef char string[MAX_STRING_SIZE];	/* representation of SNL string type */
  * It is strongly advised to treat evflag and CH_ID as opaque;
  * in future versions they may be replaced by pointer types.
  */
-typedef unsigned evflag;		/* identifier for an event */
-typedef unsigned CH_ID;			/* identifier for a pv */
+typedef struct event_flag *evflag;	/* identifier for an event */
+typedef struct channel *CH_ID;		/* identifier for a pv */
 typedef int seqBool;
 
 typedef struct seqProgram seqProgram;	/* struct defined in generated code */
@@ -93,6 +93,18 @@ epicsShareFunc pvStat seq_pvAssign(SS_ID, CH_ID, const char *);
 epicsShareFunc pvStat seq_pvMonitor(SS_ID, CH_ID);
 epicsShareFunc void seq_pvSync(SS_ID, CH_ID, evflag);
 epicsShareFunc pvStat seq_pvStopMonitor(SS_ID, CH_ID);
+
+/* pvArray functions */
+epicsShareFunc seqBool seq_pvArrayGetComplete(SS_ID, CH_ID*,
+	unsigned, seqBool, seqBool*);
+epicsShareFunc seqBool seq_pvArrayPutComplete(SS_ID, CH_ID*,
+	unsigned, seqBool, seqBool*);
+epicsShareFunc void seq_pvArrayGetCancel(SS_ID, CH_ID*, unsigned);
+epicsShareFunc void seq_pvArrayPutCancel(SS_ID, CH_ID*, unsigned);
+epicsShareFunc pvStat seq_pvArrayMonitor(SS_ID, CH_ID*, unsigned);
+epicsShareFunc pvStat seq_pvArrayStopMonitor(SS_ID, CH_ID*, unsigned);
+epicsShareFunc void seq_pvArraySync(SS_ID, CH_ID*, unsigned, evflag);
+epicsShareFunc seqBool seq_pvArrayConnected(SS_ID, CH_ID*, unsigned);
 
 /* pv info */
 epicsShareFunc char *seq_pvName(SS_ID, CH_ID);

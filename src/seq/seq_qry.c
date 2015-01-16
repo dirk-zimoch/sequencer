@@ -95,14 +95,14 @@ epicsShareFunc void epicsShareAPI seqShow(epicsThreadId tid)
 
 		printf("  Get in progress = [");
 		for (n = 0; n < sp->numChans; n++)
-			if (optTest(sp, OPT_SAFE) || seq_pvAssigned(ss, n))
-				printf("%d",!seq_pvGetComplete(ss, n));
+			if (optTest(sp, OPT_SAFE) || seq_pvAssigned(ss, sp->chan + n))
+				printf("%d",!seq_pvGetComplete(ss, sp->chan + n));
 		printf("]\n");
 
 		printf("  Put in progress = [");
 		for (n = 0; n < sp->numChans; n++)
-			if (optTest(sp, OPT_SAFE) || seq_pvAssigned(ss, n))
-				printf("%d",!seq_pvPutComplete(ss, n, 1, 0, 0));
+			if (optTest(sp, OPT_SAFE) || seq_pvAssigned(ss, sp->chan + n))
+				printf("%d",!seq_pvPutComplete(ss, sp->chan + n, 1, 0, 0));
 		printf("]\n");
 
 		if (optTest(sp, OPT_SAFE))
@@ -192,7 +192,7 @@ epicsShareFunc void epicsShareAPI seqChanShow(epicsThreadId tid, const char *str
 			printf("  Not monitored\n");
 
 		if (ch->syncedTo)
-			printf("  Sync'ed to event flag %u\n", ch->syncedTo);
+			printf("  Sync'ed to event flag %u\n", (unsigned)(ch->syncedTo - sp->eventFlags));
 		else
 			printf("  Not sync'ed\n");
 

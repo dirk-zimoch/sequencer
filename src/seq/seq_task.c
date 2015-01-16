@@ -192,16 +192,25 @@ static void ss_read_all_buffer(PROG *sp, SSCB *ss)
  * ss_read_all_buffer_selective() - Call ss_read_buffer_static
  * for all channels that are sync'ed to the given event flag.
  * NOTE: calling code must take sp->lock, as we traverse
- * the list of channels synced to this event flag.
+ * the set of channels synced to this event flag.
  */
-void ss_read_buffer_selective(PROG *sp, SSCB *ss, EF_ID ev_flag)
+void ss_read_buffer_selective(PROG *sp, SSCB *ss, evflag ev_flag)
 {
-	CHAN *ch = sp->syncedChans[ev_flag];
-	while (ch)
+	int word;
+	for (word=0; word < NWORDS(sp->numChans); word++)
 	{
-		/* Call static version so it gets inlined */
-		ss_read_buffer_static(ss, ch, TRUE);
-		ch = ch->nextSynced;
+		if (ev_flag->synced[word])
+		{
+			int i;
+			for (i=0; i<NBITS; i++)
+			{
+				if (bitTest(ev_flag->synced + word, i))
+				{
+					ss_read_buffer_static(ss,
+						sp->chan + NBITS * word + i, TRUE);
+				}
+			}
+		}
 	}
 }
 

@@ -83,6 +83,7 @@ typedef struct program_instance	PROG;
 typedef struct pvreq		PVREQ;
 typedef const struct pv_type	PVTYPE;
 typedef struct pv_meta_data	PVMETA;
+typedef struct event_flag	EVFLAG;
 
 typedef struct seqg_vars        SEQ_VARS;
 
@@ -99,8 +100,7 @@ struct channel
 
 	/* dynamic channel data (assigned at runtime) */
 	DBCHAN		*dbch;		/* channel assigned to a named db pv */
-	EF_ID		syncedTo;	/* event flag id if synced */
-	CHAN		*nextSynced;	/* next channel synced to same flag */
+	evflag		syncedTo;	/* event flag id if synced */
 	QUEUE		queue;		/* queue if queued */
 	boolean		monitored;	/* whether channel is monitored */
 	/* buffer access, only used in safe mode */
@@ -193,9 +193,9 @@ struct program_instance
 
 	/* dynamic program data (assigned at runtime) */
 	epicsMutexId	lock;	/* mutex for locking dynamic program data */
-	/* the following five members must always be protected by lock */
+	/* the following six members must always be protected by lock */
 	bitMask		*evFlags;	/* event bits for event flags & channels */
-	CHAN		**syncedChans;	/* for each event flag, start of synced list */
+	EVFLAG		*eventFlags;	/* array of event flag structures */
 	unsigned	assignCount;	/* number of channels assigned to ext. pv */
 	unsigned	connectCount;	/* number of channels connected */
 	unsigned	monitorCount;	/* number of channels monitored */
@@ -218,6 +218,11 @@ struct pvreq
 	SSCB		*ss;		/* state set that made the request */
 };
 
+struct event_flag
+{
+	seqMask		*synced;	/* set of channels synced to this event flag */
+};
+
 /* Thread parameters */
 #define THREAD_NAME_SIZE	32
 #define THREAD_STACK_SIZE	epicsThreadStackBig
@@ -229,7 +234,7 @@ struct pvreq
 void sequencer(void *arg);
 void ss_write_buffer(CHAN *ch, void *val, PVMETA *meta, boolean dirtify);
 void ss_read_buffer(SSCB *ss, CHAN *ch, boolean dirty_only);
-void ss_read_buffer_selective(PROG *sp, SSCB *ss, EF_ID ev_flag);
+void ss_read_buffer_selective(PROG *sp, SSCB *ss, evflag ev_flag);
 void ss_wakeup(PROG *sp, unsigned eventNum);
 
 /* seq_mac.c */

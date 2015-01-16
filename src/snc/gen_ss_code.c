@@ -55,9 +55,10 @@ static void gen_expr(
 static void gen_prog_func(
 	uint context,
 	Node *prog,
+	ChanList *channels,
 	const char *doc,
 	const char *name,
-	void (*gen_body)(uint context, Node *prog)
+	void (*gen_body)(uint context, Node *prog, ChanList *channels)
 );
 static void gen_prog_entex_func(
 	uint context,
@@ -66,7 +67,7 @@ static void gen_prog_entex_func(
 	const char *name,
 	void (*gen_body)(uint context, Node *)
 );
-static void gen_prog_init_body(uint context, Node *prog);
+static void gen_prog_init_body(uint context, Node *prog, ChanList *channels);
 static void gen_prog_entry_body(uint context, Node *prog);
 static void gen_prog_exit_body(uint context, Node *prog);
 
@@ -114,16 +115,16 @@ unsigned default_context(Options options)
 }
 
 /* Generate state set C code from analysed syntax tree */
-void gen_ss_code(uint context, Node *prog)
+void gen_ss_code(uint context, Node *prog, ChanList *channels)
 {
 	Node	*sp, *ssp;
 	uint	ss_num = 0;
 
-	/* Generate program init func */
+	/* Generate program init function */
 	gen_code("#define " NM_VAR " (*(struct " NM_VARS " *const *)" NM_ENV ")\n");
-	gen_prog_func(context, prog, "init", NM_INIT, gen_prog_init_body);
+	gen_prog_func(context, prog, channels, "init", NM_INIT, gen_prog_init_body);
 
-	/* Generate program entry func */
+	/* Generate program entry function */
 	if (prog->prog_entry)
 		gen_prog_entex_func(context, prog, "entry", NM_ENTRY, gen_prog_entry_body);
 
@@ -159,7 +160,7 @@ void gen_ss_code(uint context, Node *prog)
 		ss_num++;
 	}
 
-	/* Generate program exit func */
+	/* Generate program exit function */
 	if (prog->prog_exit)
 		gen_prog_entex_func(context, prog, "exit", NM_EXIT, gen_prog_exit_body);
 
@@ -464,11 +465,13 @@ static void gen_var_access(uint context, Var *vp)
 
 	assert(is_scope(vp->scope));		/* invariant */
 
+#if 0
 	if (vp->type->tag == T_EVFLAG)
 	{
 		gen_code("%d/*%s*/", vp->chan.evflag->index, vp->name);
-	}
-	else if (vp->type->tag == T_NONE || vp->type->tag == T_FUNCTION)
+	}else 
+#endif
+	if (vp->type->tag == T_NONE || vp->type->tag == T_FUNCTION)
 	{
 		gen_code("%s", vp->name);
 	}
@@ -812,6 +815,110 @@ static void gen_var_init(Var *vp, uint context, int level)
 	}
 }
 
+static void gen_channel_index(Chan *cp)
+{
+	if (cp->var->type->tag == T_ARRAY)
+		gen_code("[%d]", cp->index);
+}
+
+static void gen_channel(uint context, Chan *cp)
+{
+	Var	*vp = cp->var;
+	uint	ch_num = vp->index + cp->index;
+
+	Type	*basetype = base_type(vp->type);
+
+	if (basetype->tag == T_PRIM)
+	{
+		enum prim_type_tag type = basetype->val.prim;
+		if (type == P_LONG || type == P_ULONG)
+		{
+			gen_code(
+"#if LONG_MAX > 0x7fffffffL\n"
+			);
+			gen_line_marker(vp->decl);
+			gen_code(
+"#error variable '"
+			);
+			gen_var_decl(vp);
+			gen_code("'"
+" cannot be assigned to a PV (on the chosen target system)\\\n"
+" because Channel Access does not support integral types longer than 4 bytes.\\\n"
+" You can use '%s' instead, or the fixed size type '%s'.\n"
+"#endif\n",
+				type == P_LONG ? "int" : "unsigned int",
+				type == P_LONG ? "int32_t" : "uint32_t"
+			);
+		}
+	}
+
+	indent(1);
+	gen_var_access(ctxSet(context,C_CHID), vp);
+	gen_channel_index(cp);
+
+	/* program instance */
+	gen_code(" = seq_pvCreate("NM_ENV", ");
+
+	/* index of channel */
+	/* assigned channel name */
+	if (!cp->name)
+		gen_code("%d, 0, ", ch_num);
+	else
+		gen_code("%d, \"%s\", ", ch_num, cp->name);
+
+	/* offset to value */
+	if (ctxTest(context, C_REENT))
+		gen_code("offsetof(struct %s, ", NM_VARS);
+	else
+		gen_code("(size_t)&");
+
+	/* member inside _seq_vars struct */
+	if (vp->scope->tag == D_PROG)
+		gen_code("%s", vp->name);
+	else if (vp->scope->tag == D_SS)
+		gen_code("%s_%s.%s", NM_VARS, vp->scope->token.str, vp->name);
+	else if (vp->scope->tag == D_STATE)
+		gen_code("%s_%s.%s_%s.%s", NM_VARS,
+			vp->scope->extra.e_state->var_list->parent_scope->token.str,
+			NM_VARS, vp->scope->token.str, vp->name);
+
+	gen_channel_index(cp);
+	if (ctxTest(context, C_REENT))
+		gen_code(")");
+
+	/* variable name, including subscripts */
+	gen_code(", \"%s", vp->name);
+	gen_channel_index(cp);
+	/* variable (base) type */
+	assert(base_type(vp->type)->tag == T_PRIM);
+	gen_code("\", %s, ", prim_type_tag_name[base_type(vp->type)->val.prim]);
+
+	/* element count for arrays */
+	gen_code("%d, ", cp->count);
+#if 0
+	/* event number for this channel */
+	gen_code("%d, ", num_event_flags + vp->index + cp->index + 1);
+#endif
+	/* event flag id if synced (or 0) */
+	if (cp->sync)
+		gen_var_access(context, cp->sync);
+	else
+		gen_code("NOEVFLAG");
+
+	/* whether channel should be monitored */
+	gen_code(", %d, ", cp->monitor);
+
+	/* syncQ queue size (0=not queued) and index */
+	if (!cp->syncq)
+		gen_code("0, 0");
+	else if (!cp->syncq->size)
+		gen_code("DEFAULT_QUEUE_SIZE, %d", cp->syncq->index);
+	else
+		gen_code("%d, %d", cp->syncq->size, cp->syncq->index);
+	gen_code(");\n");
+}
+
+#if 0
 static void gen_chid_init(uint context, Var *vp, int level)
 {
 	assert(vp->decl);
@@ -831,12 +938,8 @@ static void gen_chid_init(uint context, Var *vp, int level)
 			gen_code("[%d] = %d;\n", i, vp->index +i);
 		}
 	}
-#if 0
-	else if (t->tag == T_STRUCT)
-	{
-	}
-#endif
 }
+#endif
 
 /* Generate initializers for variables of global lifetime */
 static void gen_user_var_init(uint context, Node *prog, int level)
@@ -848,25 +951,17 @@ static void gen_user_var_init(uint context, Node *prog, int level)
 	/* global variables */
 	foreach(vp, prog->extra.e_prog->first)
 	{
-		if (vp->decl && vp->decl->decl_init)
+		if (vp->type->tag != T_EVFLAG && vp->decl && vp->decl->decl_init)
 		{
 			assert(vp->type->tag != T_NONE);	/* syntax */
-			if (vp->type->tag == T_EVFLAG)
-			{
-				indent(level);
-				gen_code("seq_efInit(" NM_ENV ", ");
-				gen_var_access(context, vp);
-				gen_code(", ");
-				gen_expr(context, mk_bool_type(), vp->decl->decl_init, level);
-				gen_code(");\n");
-			}
-			else
-				gen_var_init(vp, ctxSet(context,C_STATIC), level);
+			gen_var_init(vp, ctxSet(context,C_STATIC), level);
 		}
+#if 0
 		if (type_contains_pv(vp->type))
 		{
 			gen_chid_init(context, vp, level);
 		}
+#endif
 	}
 	/* state and state set variables */
 	foreach (ssp, prog->prog_statesets)
@@ -878,10 +973,12 @@ static void gen_user_var_init(uint context, Node *prog, int level)
 		foreach(vp, ssp->extra.e_ss->var_list->first)
 		{
 			gen_var_init(vp, ctxSet(context,C_STATIC), level);
+#if 0
 			if (type_contains_pv(vp->type))
 			{
 				gen_chid_init(context, vp, level);
 			}
+#endif
 		}
 		foreach (sp, ssp->ss_states)
 		{
@@ -890,28 +987,47 @@ static void gen_user_var_init(uint context, Node *prog, int level)
 			foreach (vp, sp->extra.e_state->var_list->first)
 			{
 				gen_var_init(vp, ctxSet(context,C_STATIC), level);
+#if 0
 				if (type_contains_pv(vp->type))
 				{
 					gen_chid_init(context, vp, level);
 				}
+#endif
 			}
 		}
+	}
+}
+
+static void gen_ef_init(uint context, Var *vp, int level)
+{
+	if (vp->type->tag == T_EVFLAG)
+	{
+		indent(level);
+		gen_var_access(context,vp);
+		gen_code(" = seq_efCreate("NM_ENV", %d, ", vp->chan.evflag->index);
+		assert(vp->decl);
+		if (vp->decl->decl_init)
+			gen_expr(context, mk_bool_type(), vp->decl->decl_init, level);
+		else
+			gen_code("FALSE");
+		gen_code(");\n");
 	}
 }
 
 static void gen_prog_func(
 	uint context,
 	Node *prog,
+	ChanList *channels,
 	const char *doc,
 	const char *name,
-	void (*gen_body)(uint context, Node *prog)
+	void (*gen_body)(uint context, Node *prog, ChanList *channels)
 )
 {
 	assert(prog->tag == D_PROG);
-	gen_code("\n/* Program %s func */\n", doc);
+	gen_code("\n/* Program %s function */\n", doc);
 	gen_code("static void %s(PROG_ID " NM_ENV ")\n{\n",
 		name);
-	gen_body(context, prog);
+	gen_body(context, prog, channels);
 	gen_code("}\n");
 }
 
@@ -924,15 +1040,22 @@ static void gen_prog_entex_func(
 )
 {
 	assert(prog->tag == D_PROG);
-	gen_code("\n/* Program %s func */\n", doc);
+	gen_code("\n/* Program %s function */\n", doc);
 	gen_code("static void %s(SS_ID " NM_ENV ")\n",
 		name);
 	gen_body(context, prog);
 }
 
-static void gen_prog_init_body(uint context, Node *prog)
+static void gen_prog_init_body(uint context, Node *prog, ChanList *channels)
 {
+	Chan	*cp;
+	Var	*vp;
+
 	assert(prog->tag == D_PROG);
+	foreach(vp, prog->extra.e_prog->first)
+		gen_ef_init(context, vp, 0);
+	foreach (cp, channels->first)
+		gen_channel(context, cp);
 	gen_user_var_init(context, prog, 1);
 }
 

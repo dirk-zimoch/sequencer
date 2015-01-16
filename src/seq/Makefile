@@ -18,9 +18,11 @@ LIBRARY = seq
 seq_LIBS = pv Com
 
 seq_SRCS += seq_main.c
+seq_SRCS += seq_chan.c
 seq_SRCS += seq_task.c
 seq_SRCS += seq_ca.c
 seq_SRCS += seq_if.c
+seq_SRCS += seq_ef.c
 seq_SRCS += seq_mac.c
 seq_SRCS += seq_prog.c
 seq_SRCS += seq_qry.c

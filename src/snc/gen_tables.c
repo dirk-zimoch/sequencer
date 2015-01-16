@@ -35,7 +35,9 @@ typedef struct event_mask_args {
 	uint	num_event_flags;
 } event_mask_args;
 
+#if 0
 static void gen_channel(Chan *cp, uint num_event_flags, int opt_reent);
+#endif
 static void gen_state_table(Node *ss_list, uint num_event_flags, uint num_channels);
 static void fill_state_struct(Node *sp, char *ss_name, uint ss_num);
 static void gen_prog_table(Program *p);
@@ -56,6 +58,7 @@ void gen_tables(Program *p)
 	gen_prog_table(p);
 }
 
+#if 0
 /* Generate channel table with data for each defined channel */
 void gen_channel_table(ChanList *chan_list, uint num_event_flags, int opt_reent)
 {
@@ -178,6 +181,7 @@ static void gen_channel(Chan *cp, uint num_event_flags, int opt_reent)
 		gen_code("%d, %d", cp->syncq->size, cp->syncq->index);
 	gen_code("}");
 }
+#endif
 
 /* Generate state event mask and table */
 static void gen_state_table(Node *ss_list, uint num_event_flags, uint num_channels)
@@ -290,7 +294,9 @@ static void gen_prog_table(Program *p)
 	gen_code("seqProgram %s = {\n", p->name);
 	gen_code("\t/* magic number */      %d,\n", MAGIC);
 	gen_code("\t/* program name */      \"%s\",\n", p->name);
+#if 0
 	gen_code("\t/* channels */          " NM_CHANS ",\n");
+#endif
 	gen_code("\t/* num. channels */     %d,\n", p->chan_list->num_elems);
 	gen_code("\t/* state sets */        " NM_STATESETS ",\n");
 	gen_code("\t/* num. state sets */   %d,\n", p->num_ss);

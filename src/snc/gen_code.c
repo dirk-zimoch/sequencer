@@ -84,14 +84,16 @@ void generate_code(Program *p)
 	/* Variable declarations */
 	gen_var_struct(p->prog, p->options.reent);
 
+#if 0
 	gen_channel_table(p->chan_list, p->num_event_flags, p->options.reent);
+#endif
 
 
 	/* Function declarations */
 	gen_func_decls(p->prog);
 
 	/* State and state set functions */
-	gen_ss_code(ctx, p->prog);
+	gen_ss_code(ctx, p->prog, p->chan_list);
 
 	/* Channel, state set, and program tables */
 	gen_tables(p);
@@ -195,7 +197,7 @@ static void gen_var_struct(Node *prog, uint opt_reent)
 	}
 	foreach (vp, var_list_from_scope(prog)->first)
 	{
-		if (vp->decl && vp->type->tag != T_NONE && vp->type->tag != T_EVFLAG && vp->type->tag != T_FUNCTION)
+		if (vp->decl && vp->type->tag != T_NONE && vp->type->tag != T_FUNCTION)
 			gen_var_and_pv_decl(vp, level);
 	}
 	foreach (ssp, prog->prog_statesets)
@@ -227,7 +229,6 @@ static void gen_var_struct(Node *prog, uint opt_reent)
 static void gen_global_defn(uint ctx, Node *ep)
 {
 	Node *member;
-	Var *vp;
 
 	switch(ep->tag)
 	{
@@ -265,14 +266,6 @@ static void gen_global_defn(uint ctx, Node *ep)
 		gen_code("};\n");
 		break;
 	case D_DECL:
-		/* we handle only event flags here, for everything else see gen_var_struct */
-		vp = ep->extra.e_decl;
-		if (vp->type->tag == T_EVFLAG)
-		{
-			gen_line_marker(vp->decl);
-			gen_code("static const EF_ID %s = %d;\n", vp->name, vp->chan.evflag->index);
-		}
-		break;
 	case D_ASSIGN:
 	case D_MONITOR:
 	case D_OPTION:

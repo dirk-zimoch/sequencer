@@ -16,7 +16,7 @@ in the file LICENSE that is included with this distribution.
 #include "types.h"
 
 uint default_context(Options options);
-void gen_ss_code(uint context, Node *prog);
+void gen_ss_code(uint context, Node *prog, ChanList *channels);
 void gen_funcdef(uint context, Node *fp);
 
 #endif	/*INCLgensscodeh*/
