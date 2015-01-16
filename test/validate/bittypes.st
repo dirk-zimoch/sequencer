@@ -44,7 +44,7 @@ ss test {
         uint16_t xui16 = -1;
         int32_t xi32 = -1;
         uint32_t xui32 = -1;
-        when () {
+        when (delay(0.1)) {
             int pvstat;
             i8 = xi8;
             pvstat = pvPut(i8, SYNC);
