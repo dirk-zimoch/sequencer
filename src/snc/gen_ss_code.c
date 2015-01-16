@@ -621,11 +621,6 @@ static void gen_expr(
 	/* Expressions */
 	case E_VAR:
 		assert(ep->extra.e_var);
-/* 		if (ctxTest(context,C_STATIC) &&
-			(ctxTest(context, C_REENT) || 
-			)))
-			error_at_node(ep, "variable reference not allowed here\n");
-		else */
 		if (type_contains_pv(expected))
 			gen_var_access(ctxSet(context,C_CHID), ep->extra.e_var);
 		else
@@ -659,11 +654,6 @@ static void gen_expr(
 		}
 		break;
 	case E_INIT:
-#if 0
-		if (!ctxTest(context,C_STATIC))
-			error_at_node(ep, "aggregate initializer not allowed here\n");
-#endif
-
 		gen_code("{");
 		foreach (cep, ep->init_elems)
 		{
@@ -915,12 +905,6 @@ static void gen_user_var_init(uint context, Node *prog, int level)
 			assert(vp->type->tag != T_NONE);	/* syntax */
 			gen_var_init(vp, ctxSet(context,C_STATIC), level);
 		}
-#if 0
-		if (type_contains_pv(vp->type))
-		{
-			gen_chid_init(context, vp, level);
-		}
-#endif
 	}
 	/* state and state set variables */
 	foreach (ssp, prog->prog_statesets)
@@ -932,12 +916,6 @@ static void gen_user_var_init(uint context, Node *prog, int level)
 		foreach(vp, ssp->extra.e_ss->var_list->first)
 		{
 			gen_var_init(vp, ctxSet(context,C_STATIC), level);
-#if 0
-			if (type_contains_pv(vp->type))
-			{
-				gen_chid_init(context, vp, level);
-			}
-#endif
 		}
 		foreach (sp, ssp->ss_states)
 		{
@@ -946,12 +924,6 @@ static void gen_user_var_init(uint context, Node *prog, int level)
 			foreach (vp, sp->extra.e_state->var_list->first)
 			{
 				gen_var_init(vp, ctxSet(context,C_STATIC), level);
-#if 0
-				if (type_contains_pv(vp->type))
-				{
-					gen_chid_init(context, vp, level);
-				}
-#endif
 			}
 		}
 	}
