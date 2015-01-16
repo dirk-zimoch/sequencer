@@ -16,5 +16,6 @@ in the file LICENSE that is included with this distribution.
 #include "types.h"
 
 void gen_tables(Program *program);
+void gen_channel_table(ChanList *chan_list, uint num_event_flags, int opt_reent);
 
 #endif	/*INCLgentablesh*/

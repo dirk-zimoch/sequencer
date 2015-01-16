@@ -23,6 +23,7 @@ enum type_tag {
     T_CONST,
 #endif
     T_STRUCT,   /* struct defined in SNL code */
+    T_PV,
 };
 
 enum foreign_type_tag {
@@ -61,6 +62,9 @@ struct type {
             const char *name;
             Node *member_decls;
         } structure;
+        struct {
+            Type *value_type;
+        } pv;
     } val;
 };
 
@@ -74,8 +78,21 @@ unsigned type_array_length2(Type *t);
 /* whether type can be assign'ed to a PV */
 unsigned type_assignable(Type *t);
 
-/* generate code for a type, name is an optional variable name  */
+/* whether type contains PV marker */
+Type *type_contains_pv(Type *t);
+
+#define type_is_function(t) ((t)->tag == T_FUNCTION ? t : \
+    (t)->tag == T_POINTER && (t)->val.pointer.value_type->tag == T_FUNCTION ? \
+    (t)->val.pointer.value_type : 0)
+
+#define type_is_pointer(t) ((t)->tag == T_POINTER || (t)->tag == T_ARRAY)
+
+#define strip_pv_type(t) ((t)->tag == T_PV ? (t)->val.pv.value_type : (t))
+
+/* generate type, name is an optional variable name */
 void gen_type(Type *t, const char *prefix, const char *name);
+/* generate channel id type */
+void gen_pv_type(Type *t, const char *prefix, const char *name);
 
 /* creating types */
 Type *mk_prim_type(enum prim_type_tag tag);
@@ -88,9 +105,12 @@ Type *mk_array_type(Type *t, unsigned n);
 Type *mk_const_type(Type *t);
 Type *mk_function_type(Type *t, Node *ps);
 Type *mk_structure_type(const char *name, Node *members);
+Type *mk_pv_type(Type *t);
 
 Node *mk_decl(Node *d, Type *t);
 Node *mk_decls(Node *ds, Type *t);
+
+Node *new_decl(Token k, Type *type);
 
 void dump_type(Type *t, int l);
 
@@ -126,6 +146,7 @@ const char *type_tag_names[]
     "T_CONST",
 #endif
     "T_STRUCT",
+    "T_PV",
 }
 #endif
 ;

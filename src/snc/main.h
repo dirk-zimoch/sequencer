@@ -57,10 +57,6 @@ __attribute__((format(printf,2,3)));
 void error_at_node(struct syntax_node *ep, const char *format, ...)
 __attribute__((format(printf,2,3)));
 
-/* with location from this node and report a bug in snc */
-void assert_at_node(int cond, struct syntax_node *ep, const char *format, ...)
-__attribute__((format(printf,3,4)));
-
 /* message only */
 void report(const char *format, ...)
 __attribute__((format(printf,1,2)));

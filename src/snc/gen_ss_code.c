@@ -21,94 +21,111 @@ in the file LICENSE that is included with this distribution.
 #include "builtin.h"
 #include "gen_ss_code.h"
 #include "type_check.h"
+#include "snl.h"
 
 static const int impossible = 0;
 
-static void gen_local_var_decls(Node *scope, int context, int level);
 static void gen_state_func(
 	const char *ss_name,
 	uint ss_num,
 	const char *state_name,
 	Node *xp,
-	void (*gen_body)(Node *xp, int context),
-	int context,
+	void (*gen_body)(uint context, Node *xp),
+	uint context,
 	const char *title,
 	const char *prefix,
 	const char *rettype,
 	const char *extra_args
 );
-static void gen_entex_body(Node *xp, int context);
-static void gen_event_body(Node *xp, int context);
-static void gen_action_body(Node *xp, int context);
-static void gen_expr(int context, Node *ep, int level);
-static void gen_builtin_call(int context, Node *ep);
-static void gen_ef_arg(
-	int		context,
-	const char	*func_name,	/* function name */
-	Node		*ap,		/* argument expression */
-	uint		index);		/* argument index */
-static void gen_pv_arg(
-	int		context,
-	const char	*func_name,	/* function name */
-	Node		*ap,		/* argument expression */
-	uint		index,		/* argument index */
-	uint		pv_array);	/* function expects a pv array */
-
+static void gen_entex_body(uint context, Node *xp);
+static void gen_event_body(uint context, Node *xp);
+static void gen_action_body(uint context, Node *xp);
+static void gen_statement(
+	uint context,
+	Type *return_type,	/* type expected for a return expression */
+	Node *ep,		/* node to generate code for */
+	int level		/* indentation level */
+);
+static void gen_expr(
+	uint context,
+	Type *expected,		/* expected type of expression */
+	Node *ep,		/* expression to generate code for */
+	int level		/* indentation level */
+);
 static void gen_prog_func(
+	uint context,
 	Node *prog,
 	const char *doc,
 	const char *name,
-	void (*gen_body)(Node *prog)
+	void (*gen_body)(uint context, Node *prog)
 );
 static void gen_prog_entex_func(
+	uint context,
 	Node *prog,
 	const char *doc,
 	const char *name,
-	void (*gen_body)(Node *)
+	void (*gen_body)(uint context, Node *)
 );
-static void gen_prog_init_body(Node *prog);
-static void gen_prog_entry_body(Node *prog);
-static void gen_prog_exit_body(Node *prog);
+static void gen_prog_init_body(uint context, Node *prog);
+static void gen_prog_entry_body(uint context, Node *prog);
+static void gen_prog_exit_body(uint context, Node *prog);
 
 /*
  * Expression context. Certain nodes of the syntax tree are
  * interpreted differently depending on the context in which
  * they appear. For instance, the state change command is only
- * allowed in transition action context (C_TRANS).
+ * allowed in transition action context (C_TRANS flag set).
  */
-enum context
+enum context_flag
 {
 	C_COND,		/* when() condition */
 	C_TRANS,	/* state transition actions */
-	C_SS,		/* otherwise inside a state set */
-	C_FUNC,		/* inside a function definition */
-	C_GLOBAL	/* outside state sets and functions */
+	C_FUNC,		/* function definition */
+	C_STATIC,	/* static initializer */
+	C_CHID,		/* expected channel id */
+	C_REENT,	/* reentrant option is active */
+	C_NEWPV,	/* newpv option is active */
 };
 
-/*
- * HACK: use global variable to make reentrant option available
- * to gen_var_access below. Otherwise we'd have to pass it through
- * almost every subroutine in this module.
- */
-static Options global_options;
+#define ctxClear(ctx,flag)	( (ctx) & (~(1u<<(flag+16))) )
+#define ctxSet(ctx,flag)	( (ctx) | ((1u<<(flag+16))) )
+#define ctxEmpty		( 0u )
+#define ctxTest(ctx,flag)	( ((ctx) & (1u<<(flag+16))) )
+
+void dump_ctx(uint context)
+{
+	report("%s%s%s%s%s%s%s",
+		ctxTest(context,C_COND)?"O":"",
+		ctxTest(context,C_TRANS)?"T":"",
+		ctxTest(context,C_FUNC)?"F":"",
+		ctxTest(context,C_STATIC)?"S":"",
+		ctxTest(context,C_CHID)?"C":"",
+		ctxTest(context,C_REENT)?"R":"",
+		ctxTest(context,C_NEWPV)?"P":"");
+}
+
+unsigned default_context(Options options)
+{
+	uint	context = ctxEmpty;
+
+	if (options.reent)
+		context = ctxSet(context,C_REENT);
+	return context;
+}
 
 /* Generate state set C code from analysed syntax tree */
-void gen_ss_code(Node *prog, Options options)
+void gen_ss_code(uint context, Node *prog)
 {
 	Node	*sp, *ssp;
 	uint	ss_num = 0;
 
-	/* HACK: intialise global variable as implicit parameter */
-	global_options = options;
-
-	gen_code("\n#define " NM_VAR " (*(struct " NM_VARS " *const *)" NM_ENV ")\n");
-
 	/* Generate program init func */
-	gen_prog_func(prog, "init", NM_INIT, gen_prog_init_body);
+	gen_code("#define " NM_VAR " (*(struct " NM_VARS " *const *)" NM_ENV ")\n");
+	gen_prog_func(context, prog, "init", NM_INIT, gen_prog_init_body);
 
 	/* Generate program entry func */
 	if (prog->prog_entry)
-		gen_prog_entex_func(prog, "entry", NM_ENTRY, gen_prog_entry_body);
+		gen_prog_entex_func(context, prog, "entry", NM_ENTRY, gen_prog_entry_body);
 
 	/* For each state set ... */
 	foreach (ssp, prog->prog_statesets)
@@ -123,20 +140,20 @@ void gen_ss_code(Node *prog, Options options)
 			if (sp->state_entry)
 				gen_state_func(ssp->token.str, ss_num, sp->token.str, 
 					sp->state_entry, gen_entex_body,
-					C_SS, "Entry", NM_ENTRY, "void", "");
+					context, "Entry", NM_ENTRY, "void", "");
 			if (sp->state_exit)
 				gen_state_func(ssp->token.str, ss_num, sp->token.str,
 					sp->state_exit, gen_entex_body,
-					C_SS, "Exit", NM_EXIT, "void", "");
+					context, "Exit", NM_EXIT, "void", "");
 			/* Generate event processing function */
 			gen_state_func(ssp->token.str, ss_num, sp->token.str,
 				sp->state_whens, gen_event_body,
-				C_SS, "Event", NM_EVENT, "seqBool",
+				context, "Event", NM_EVENT, "seqBool",
 				", int *"NM_PTRN", int *"NM_PNST);
 			/* Generate action processing function */
 			gen_state_func(ssp->token.str, ss_num, sp->token.str,
 				sp->state_whens, gen_action_body,
-				C_TRANS, "Action", NM_ACTION, "void",
+				context, "Action", NM_ACTION, "void",
 				", int "NM_TRN", int *"NM_PNST);
 		}
 		ss_num++;
@@ -144,39 +161,9 @@ void gen_ss_code(Node *prog, Options options)
 
 	/* Generate program exit func */
 	if (prog->prog_exit)
-		gen_prog_entex_func(prog, "exit", NM_EXIT, gen_prog_exit_body);
+		gen_prog_entex_func(context, prog, "exit", NM_EXIT, gen_prog_exit_body);
 
-	gen_code("\n#undef " NM_VAR "\n");
-}
-
-/* Generate a local C variable declaration for each variable declared
-   inside the body of an entry, exit, when, or compound statement block. */
-static void gen_local_var_decls(Node *scope, int context, int level)
-{
-	Var	*vp;
-	VarList	*var_list;
-
-	var_list = var_list_from_scope(scope);
-
-	/* Convert internal type to `C' type */
-	foreach (vp, var_list->first)
-	{
-		assert(vp->type->tag != T_NONE);
-		assert(vp->type->tag != T_EVFLAG);
-		assert(vp->decl);
-
-		gen_line_marker(vp->decl);
-		indent(level);
-		gen_var_decl(vp);
-
-		/* optional initialisation */
-		if (vp->decl->decl_init)
-		{
-			gen_code(" = ");
-			gen_expr(context, vp->decl->decl_init, level);
-		}
-		gen_code(";\n");
-	}
+	gen_code("#undef " NM_VAR);
 }
 
 static void gen_state_func(
@@ -184,8 +171,8 @@ static void gen_state_func(
 	uint ss_num,
 	const char *state_name,
 	Node *xp,
-	void (*gen_body)(Node *xp, int context),
-	int context,
+	void (*gen_body)(uint context, Node *xp),
+	uint context,
 	const char *title,
 	const char *prefix,
 	const char *rettype,
@@ -196,34 +183,75 @@ static void gen_state_func(
 		title, state_name, ss_name);
 	gen_code("static %s %s_%s_%d_%s(SS_ID " NM_ENV "%s)\n",
 		rettype, prefix, ss_name, ss_num, state_name, extra_args);
-	gen_body(xp, context);
+	gen_body(context, xp);
 }
 
-static void gen_block(Node *xp, int context, int level)
+#if 0
+static void add_user_var_decl(Node *block)
+{
+	Token t;
+
+	assert(block->tag == S_CMPND);
+	t.type = TOK_CCODE;
+	t.str = "SEQ_VARS const* "NM_VAR" = (SEQ_VARS const*)seq_pVar("NM_SS");\n";
+	t.line = block->line_num;
+	t.file = block->src_file;
+	block->cmpnd_defns = link_expr(expr(T_TEXT, t), block->cmpnd_defns);
+}
+#endif
+
+static void gen_block(uint context, Type *return_type, Node *xp, int level)
 {
 	Node	*cxp;
 
-	assert(xp->tag == S_CMPND);
-	gen_code("{\n");
-	gen_local_var_decls(xp, context, level+1);
-	gen_defn_c_code(xp, level+1);
+	assert(xp->tag == S_CMPND);			/* precondition */
+	indent(level); gen_code("{\n");
+
+	foreach (cxp, xp->cmpnd_defns)
+	{
+		if (cxp->tag == D_DECL)
+		{
+			Var *vp = cxp->extra.e_decl;
+			assert(vp->type->tag != T_NONE);	/* syntax */
+			assert(vp->type->tag != T_EVFLAG);	/* syntax */
+			assert(vp->decl);			/* invariant */
+
+			gen_line_marker(vp->decl);
+			indent(level+1);
+			gen_var_decl(vp);
+
+			/* optional initialisation */
+			if (cxp->decl_init)
+			{
+				gen_code(" = ");
+				gen_expr(context, vp->type, vp->decl->decl_init, level+1);
+			}
+			gen_code(";\n");
+		}
+		else if (cxp->tag == T_TEXT)
+		{
+			gen_line_marker(cxp);
+			indent(level+1);
+			gen_code("%s\n", cxp->token.str);
+		}
+	}
+
 	foreach (cxp, xp->cmpnd_stmts)
 	{
-		gen_expr(context, cxp, level+1);
+		gen_statement(context, return_type, cxp, level+1);
 	}
+
 	indent(level); gen_code("}\n");
 }
 
-static void gen_entex_body(Node *xp, int context)
+static void gen_entex_body(uint context, Node *xp)
 {
-	assert(xp->tag == D_ENTEX);
-	gen_block(xp->entex_block, context, 0);
+	assert(xp->tag == D_ENTEX);			/* precondition */
+	assert(xp->entex_block->tag == S_CMPND);	/* invariant */
+	gen_block(context, mk_no_type(), xp->entex_block, 0);
 }
 
-/* Generate action processing functions:
-   Each state has one action routine.  It's name is derived from the
-   state set name and the state name. */
-static void gen_action_body(Node *xp, int context)
+static void gen_action_body(uint context, Node *xp)
 {
 	Node		*tp;
 	int		trans_num;
@@ -238,10 +266,10 @@ static void gen_action_body(Node *xp, int context)
 	/* For each transition ("when" statement) ... */
 	foreach (tp, xp)
 	{
-		assert(tp->tag == D_WHEN);
+		assert(tp->tag == D_WHEN);		/* precondition */
 		/* one case for each transition */
 		indent(level); gen_code("case %d:\n", trans_num);
-		indent(level+1); gen_block(tp->when_block, context, level+1);
+		gen_block(ctxSet(context,C_TRANS), mk_no_type(), tp->when_block, level+1);
 		/* end of case */
 		indent(level+1); gen_code("return;\n");
 		trans_num++;
@@ -252,8 +280,18 @@ static void gen_action_body(Node *xp, int context)
 	gen_code("}\n");
 }
 
+static Type *mk_bool_type(void)
+{
+	return mk_prim_type(P_INT);
+}
+
+static Type *mk_index_type(void)
+{
+	return mk_prim_type(P_LONG);
+}
+
 /* Generate a C function that checks events for a particular state */
-static void gen_event_body(Node *xp, int context)
+static void gen_event_body(uint context, Node *xp)
 {
 	Node		*tp;
 	int		trans_num;
@@ -266,14 +304,14 @@ static void gen_event_body(Node *xp, int context)
 	{
 		Node *next_sp;
 
-		assert(tp->tag == D_WHEN);
+		assert(tp->tag == D_WHEN);		/* precondition */
 		if (tp->when_cond)
 			gen_line_marker(tp->when_cond);
 		indent(level); gen_code("if (");
 		if (tp->when_cond == 0)
 			gen_code("TRUE");
 		else
-			gen_expr(C_COND, tp->when_cond, 0);
+			gen_expr(context, mk_bool_type(), tp->when_cond, level);
 		gen_code(")\n");
 		indent(level); gen_code("{\n");
 
@@ -299,50 +337,9 @@ static void gen_event_body(Node *xp, int context)
 	gen_code("}\n");
 }
 
-static void gen_var_access(Var *vp)
-{
-	const char *pre = global_options.reent ? NM_VAR "->" : "";
-
-	assert(vp);
-	assert(vp->scope);
-
-#ifdef DEBUG
-	report("var_access: %s, scope=(%s,%s)\n",
-		vp->name, node_name(vp->scope), vp->scope->token.str);
-#endif
-	assert(is_scope(vp->scope));
-
-	if (vp->type->tag == T_EVFLAG)
-	{
-		gen_code("%s", vp->name);
-	}
-	else if (vp->type->tag == T_NONE || vp->type->tag == T_FUNCTION)
-	{
-		gen_code("%s", vp->name);
-	}
-	else if (vp->scope->tag == D_PROG)
-	{
-		gen_code("%s%s", pre, vp->name);
-	}
-	else if (vp->scope->tag == D_SS)
-	{
-		gen_code("%s%s_%s.%s", pre, NM_VARS, vp->scope->token.str, vp->name);
-	}
-	else if (vp->scope->tag == D_STATE)
-	{
-		gen_code("%s%s_%s.%s_%s.%s", pre, NM_VARS,
-			vp->scope->extra.e_state->var_list->parent_scope->token.str,
-			NM_VARS, vp->scope->token.str, vp->name);
-	}
-	else	/* compound or when stmt => generate a local C variable */
-	{
-		gen_code("%s", vp->name);
-	}
-}
-
-/* Recursively generate code for a syntax node */
-static void gen_expr(
-	int context,
+static void gen_statement(
+	uint context,
+	Type *return_type,
 	Node *ep,		/* node to generate code for */
 	int level		/* indentation level */
 )
@@ -355,360 +352,444 @@ static void gen_expr(
 #ifdef	DEBUG
 	report("gen_expr(%s,%s)\n", node_name(ep), ep->token.str);
 #endif
-
 	switch(ep->tag)
 	{
 	/* Statements */
 	case S_CMPND:
-		indent(level); gen_block(ep, context, level);
+		gen_block(context, return_type, ep, level);
 		break;
 	case S_STMT:
 		gen_line_marker(ep);
 		indent(level);
-		gen_expr(context, ep->stmt_expr, 0);
+		gen_expr(context, mk_void_type(), ep->stmt_expr, level);
 		gen_code(";\n");
 		break;
 	case S_IF:
 		gen_line_marker(ep);
 		indent(level);
 		gen_code("if (");
-		gen_expr(context, ep->if_cond, 0);
+		gen_expr(context, mk_bool_type(), ep->if_cond, level);
 		gen_code(")\n");
 		cep = ep->if_then;
-		gen_expr(context, cep, cep->tag == S_CMPND ? level : level+1);
+		gen_statement(context, return_type, cep,
+			cep->tag == S_CMPND ? level : level+1);
 		if (ep->if_else)
 		{
 			indent(level);
 			gen_code("else\n");
 			cep = ep->if_else;
-			gen_expr(context, cep, cep->tag == S_CMPND ? level : level+1);
+			gen_statement(context, return_type, cep,
+				cep->tag == S_CMPND ? level : level+1);
 		}
 		break;
 	case S_WHILE:
 		gen_line_marker(ep);
 		indent(level);
 		gen_code("while (");
-		gen_expr(context, ep->while_cond, 0);
+		gen_expr(context, mk_bool_type(), ep->while_cond, level);
 		gen_code(")\n");
 		cep = ep->while_stmt;
-		gen_expr(context, cep, cep->tag == S_CMPND ? level : level+1);
+		gen_statement(context, return_type, cep,
+			cep->tag == S_CMPND ? level : level+1);
 		break;
 	case S_FOR:
 		gen_line_marker(ep);
 		indent(level);
 		gen_code("for (");
-		gen_expr(context, ep->for_init, 0);
+		gen_expr(context, mk_void_type(), ep->for_init, level);
 		gen_code("; ");
-		gen_expr(context, ep->for_cond, 0);
+		gen_expr(context, mk_bool_type(), ep->for_cond, level);
 		gen_code("; ");
-		gen_expr(context, ep->for_iter, 0);
+		gen_expr(context, mk_void_type(), ep->for_iter, level);
 		gen_code(")\n");
 		cep = ep->for_stmt;
-		gen_expr(context, cep, cep->tag == S_CMPND ? level : level+1);
+		gen_statement(context, return_type, cep,
+			cep->tag == S_CMPND ? level : level+1);
 		break;
 	case S_JUMP:
 		indent(level);
 		gen_code("%s;\n", ep->token.str);
 		break;
 	case S_CHANGE:
-		if (context != C_TRANS)
+		if (!ctxTest(context,C_TRANS))
 		{
 			error_at_node(ep, "state change statement not allowed here\n");
 			break;
 		}
 		indent(level);
-		gen_code("{*" NM_PNST " = %d; return;}\n", ep->extra.e_change->extra.e_state->index);
+		gen_code("{*" NM_PNST " = %d; return;}\n",
+			ep->extra.e_change->extra.e_state->index);
 		break;
 	case S_RETURN:
-		if (context != C_FUNC)
+		if (!ctxTest(context,C_FUNC))
 		{
 			error_at_node(ep, "return statement not allowed here\n");
 			break;
 		}
 		indent(level);
-		gen_code("return "); gen_expr(context, ep->return_expr, level); gen_code(";\n");
+		gen_code("return ");
+		gen_expr(context, return_type, ep->return_expr, level);
+		gen_code(";\n");
 		break;
+	case T_TEXT:
+		indent(level);
+		gen_code("%s\n", ep->token.str);
+		break;
+	default:
+		error_at_node(ep, "unhandled expression (%s:%s)\n",
+			node_name(ep), ep->token.str);
+		assert(impossible);
+	}
+}
+
+static void gen_var_access(uint context, Var *vp)
+{
+	const char *id_pre = type_contains_pv(vp->type) && ctxTest(context,C_CHID) ? NM_CHID : "";
+	const char *pre = ctxTest(context,C_REENT) ? NM_VAR "->" : "";
+
+	assert(vp);				/* precondition */
+	assert(vp->scope);			/* invariant */
+
+#ifdef DEBUG
+	report("gen_var_access: %s, context=",vp->name);
+	dump_ctx(context);
+	report(", scope=(%s,%s)\n",
+		node_name(vp->scope), vp->scope->token.str);
+#endif
+
+	assert(ctxTest(context,C_CHID) || !type_contains_pv(vp->type)
+		|| vp->scope->tag == D_PROG
+		|| vp->scope->tag == D_SS
+		|| vp->scope->tag == D_STATE);
+
+	assert(is_scope(vp->scope));		/* invariant */
+
+	if (vp->type->tag == T_EVFLAG)
+	{
+		gen_code("%d/*%s*/", vp->chan.evflag->index, vp->name);
+	}
+	else if (vp->type->tag == T_NONE || vp->type->tag == T_FUNCTION)
+	{
+		gen_code("%s", vp->name);
+	}
+	else if (vp->scope->tag == D_PROG)
+	{
+		gen_code("%s%s%s", pre, id_pre, vp->name);
+	}
+	else if (vp->scope->tag == D_SS)
+	{
+		gen_code("%s%s_%s.%s%s", pre, NM_VARS, vp->scope->token.str, id_pre, vp->name);
+	}
+	else if (vp->scope->tag == D_STATE)
+	{
+		gen_code("%s%s_%s.%s_%s.%s%s", pre, NM_VARS,
+			vp->scope->extra.e_state->var_list->parent_scope->token.str,
+			NM_VARS, vp->scope->token.str, id_pre, vp->name);
+	}
+	/* function parameter or compound stmt => direct variable access */
+	else
+	{
+		gen_code("%s%s", id_pre, vp->name);
+	}
+}
+
+static void gen_func_args(uint context, Type *ft, Node *ep)
+{
+	Node *ap;
+
+	assert(ep->tag == E_FUNC);		/* precondition */
+	if (!ft)
+	{
+		/* foreign function: just generate argument expressions
+		   and let the C compiler figure out what to make of it */
+		foreach (ap, ep->func_args)
+		{
+			gen_expr(context, mk_no_type(), ap, 0);
+			if (ap->next)
+				gen_code(", ");
+		}
+	}
+	else
+	{
+		Node *pd;
+
+#ifdef DEBUG
+		report("gen_func_args() function:\n");
+		dump_expr(ep, 1);
+#endif
+
+		assert(ft->tag == T_FUNCTION);	/* invariant */
+
+		/* add arguments for implicit parameters */
+		gen_code(NM_ENV);
+
+		ap = ep->func_args;
+		foreach (pd, ft->val.function.param_decls->next)
+		{
+			Type *pt = pd->extra.e_decl->type;
+
+#ifdef DEBUG
+			report("gen_func_args() parameter type:\n");
+			dump_type(pt, 1);
+#endif
+			gen_code(", ");
+#ifdef DEBUG
+			report("gen_func_args() argument expr:\n");
+#endif
+			if (ap)
+			{
+#ifdef DEBUG
+				dump_expr(ap, 1);
+#endif
+				gen_expr(context, pt, ap, 0);
+				ap = ap->next;
+			}
+			else if (pd->decl_init)
+			{
+				/* we have a default for the parameter */
+#ifdef DEBUG
+				dump_expr(pd->decl_init, 1);
+#endif
+				gen_expr(ctxSet(context,C_STATIC), pt, pd->decl_init, 0);
+			}
+			else
+			{
+				error_at_node(ep, "not enough arguments\n");
+				return;
+			}
+		}
+		if (ap)
+		{
+			warning_at_node(ep, "discarding excess arguments\n");
+		}
+	}
+}
+
+static void gen_expr(
+	uint context,
+	Type *expected,
+	Node *ep,		/* expression to generate code for */
+	int level		/* indentation level */
+)
+{
+	Node	*cep;		/* child expression */
+	Type	*inferred;	/* inferred type of expression */
+
+	if (ep == 0)
+		return;
+
+#ifdef	DEBUG
+	report("gen_expr()\n");
+	dump_expr(ep,1);
+#endif
+
+	/* The only point where we do real type-checking is here. */
+	inferred = type_of(ep);
+	if (expected->tag != T_PV && expected->tag != T_VOID && inferred->tag == T_PV)
+	{
+#ifdef DEBUG
+		report("maybe insert seq_pvValue\n");
+#endif
+		/* optimisation: access C variable directly */
+		/* note: this also allows certain initializers to be static */
+		if (ep->tag == E_VAR && (
+			!type_contains_pv(ep->extra.e_var->type) || (
+				( ep->extra.e_var->scope->tag == D_PROG
+				|| ep->extra.e_var->scope->tag == D_SS
+				|| ep->extra.e_var->scope->tag == D_STATE
+				)
+				&& ep->extra.e_var->type->tag != T_POINTER
+				)
+			)
+		)
+		{
+			gen_var_access(context, ep->extra.e_var);
+		}
+		else
+		{
+			/* convert the pv expression to a C value */
+			gen_code("seq_pvValue(");
+			/* note this will *not* fail even though type inference
+			   is inexact, because the inexactness is limited to
+			   *value* expressions, and does not apply to
+			   expressions that have pv type */
+			gen_type(mk_pointer_type(inferred), "", "");
+			gen_code(", ");
+			gen_expr(context, mk_pv_type(expected), ep, level);
+			gen_code(")");
+		}
+		return;
+	}
+	else if (expected->tag == T_PV && inferred->tag != T_PV)
+	{
+		error_at_node(ep, "expected pv type\n");
+		return;
+	}
+
+	switch(ep->tag)
+	{
+
 	/* Expressions */
 	case E_VAR:
-		gen_var_access(ep->extra.e_var);
+		assert(ep->extra.e_var);
+/* 		if (ctxTest(context,C_STATIC) &&
+			(ctxTest(context, C_REENT) || 
+			)))
+			error_at_node(ep, "variable reference not allowed here\n");
+		else */
+		if (type_contains_pv(expected))
+			gen_var_access(ctxSet(context,C_CHID), ep->extra.e_var);
+		else
+			gen_var_access(context, ep->extra.e_var);
 		break;
 	case E_SUBSCR:
-		gen_expr(context, ep->subscr_operand, 0);
+		gen_expr(context, mk_pointer_type(expected), ep->subscr_operand, level);
 		gen_code("[");
-		gen_expr(context, ep->subscr_index, 0);
+		/* note: passing as array index discards pv from type */
+		gen_expr(context, mk_index_type(), ep->subscr_index, level);
 		gen_code("]");
 		break;
 	case E_CONST:
-		if (ep->extra.e_const)
-			gen_code("%s", ep->extra.e_const->name);
-		else
-			gen_code("%s", ep->token.str);
+		gen_code("%s", ep->token.str);
 		break;
 	case E_STRING:
 		gen_code("\"%s\"", ep->token.str);
 		break;
 	case E_FUNC:
-		if (ep->func_expr->tag == E_BUILTIN)
+		if (ctxTest(context,C_STATIC))
 		{
-			gen_builtin_call(context, ep);
-			break;
+			error_at_node(ep, "function call not allowed here\n");
 		}
-		gen_expr(context, ep->func_expr, 0);
-		gen_code("(");
-		if (type_is_function(ep->func_expr))
+		else
 		{
-			/* add arguments for implicit parameters */
-			gen_code(NM_ENV);
-			if (ep->func_args)
-				gen_code(", ");
+			Type *func_type = type_of(ep->func_expr);
+			gen_expr(context, func_type, ep->func_expr, level);
+			gen_code("(");
+			gen_func_args(context, type_is_function(func_type), ep);
+			gen_code(")");
 		}
-		foreach (cep, ep->func_args)
-		{
-			gen_expr(context, cep, 0);
-			if (cep->next)
-				gen_code(", ");
-		}
-		gen_code(")");
 		break;
 	case E_INIT:
+#if 0
+		if (!ctxTest(context,C_STATIC))
+			error_at_node(ep, "aggregate initializer not allowed here\n");
+#endif
+
 		gen_code("{");
 		foreach (cep, ep->init_elems)
 		{
-			gen_expr(context, cep, 0);
+			gen_expr(context, expected, cep, level);
 			if (cep->next)
 				gen_code(", ");
 		}
 		gen_code("}");
 		break;
 	case E_TERNOP:
-		gen_expr(context, ep->ternop_cond, 0);
+		gen_expr(context, mk_bool_type(), ep->ternop_cond, level);
 		gen_code(" ? ");
-		gen_expr(context, ep->ternop_then, 0);
+		gen_expr(context, strip_pv_type(expected), ep->ternop_then, level);
 		gen_code(" : ");
-		gen_expr(context, ep->ternop_else, 0);
+		gen_expr(context, strip_pv_type(expected), ep->ternop_else, level);
+		break;
+	case E_ASSOP:
+#ifdef DEBUG
+		report("gen_expr(E_ASSOP)\n");
+		dump_expr(ep,1);
+#endif
+		if (ctxTest(context,C_STATIC))
+			error_at_node(ep, "assignment operator not allowed here\n");
+		expected = strip_pv_type(type_of(ep->assop_left));
+		gen_expr(context, expected, ep->assop_left, level);
+		gen_code(" %s ", ep->token.str);
+		gen_expr(context, expected, ep->assop_right, level);
 		break;
 	case E_BINOP:
-		gen_expr(context, ep->binop_left, 0);
+		gen_expr(context, strip_pv_type(expected), ep->binop_left, level);
 		gen_code(" %s ", ep->token.str);
-		gen_expr(context, ep->binop_right, 0);
+		gen_expr(context, strip_pv_type(expected), ep->binop_right, level);
 		break;
 	case E_SELECT:
-		gen_expr(context, ep->select_left, 0);
+		/* TODO: allow pv typed members, check struct type */
+		gen_expr(context, mk_no_type(), ep->select_left, level);
 		gen_code("%s", ep->token.str);
-		gen_expr(context, ep->select_right, 0);
+		assert(ep->select_right->tag == E_MEMBER);	/* syntax */
+		gen_code("%s", ep->select_right->token.str);
 		break;
 	case E_MEMBER:
-		gen_code("%s", ep->token.str);
+		assert(impossible);
 		break;
 	case E_PAREN:
 		gen_code("(");
-		gen_expr(context, ep->paren_expr, 0);
+		gen_expr(context, expected, ep->paren_expr, level);
 		gen_code(")");
 		break;
 	case E_CAST:
 		gen_code("(");
-		gen_expr(context, ep->cast_type, 0);
+		gen_var_decl(ep->cast_type->extra.e_decl);
 		gen_code(")");
-		gen_expr(context, ep->cast_operand, 0);
+		/* TODO: is it correct to expect the cast type or should this be no_type? */
+		gen_expr(context, ep->cast_type->extra.e_decl->type, ep->cast_operand, level);
 		break;
 	case E_PRE:
 		gen_code("%s", ep->token.str);
-		gen_expr(context, ep->pre_operand, 0);
-		break;
-	case E_POST:
-		gen_expr(context, ep->post_operand, 0);
-		gen_code("%s", ep->token.str);
-		break;
-	/* C-code can be either definition, statement, or expression */
-	case T_TEXT:
-		indent(level);
-		gen_code("%s\n", ep->token.str);
-		break;
-	case D_DECL:
-		gen_var_decl(ep->extra.e_decl);
-		break;
-	default:
-		assert_at_node(impossible, ep, "unhandled expression (%s:%s)\n",
-			node_name(ep), ep->token.str);
-	}
-}
-
-/* Generate builtin function call */
-static void gen_builtin_call(int context, Node *ep)
-{
-	Node *ap;	/* argument node */
-	struct func_symbol *fsym = ep->func_expr->extra.e_builtin;
-	const struct param **ppp;
-	uint n = 1;
-
-	assert(ep->func_expr->tag == E_BUILTIN);
-	assert(fsym);
-
-	/* All builtin functions require ssId as 1st parameter */
-	assert_at_node(context != C_GLOBAL, ep,
-		"calling built-in function %s not allowed here\n", fsym->name);
-	gen_code("seq_%s("NM_ENV, fsym->c_name ? fsym->c_name : fsym->name);
-	if (fsym->cond_only && context != C_COND)
-	{
-		error_at_node(ep,
-			"calling %s is only allowed inside a when condition\n", fsym->name);
-		return;
-	}
-	if (fsym->action_only && context == C_COND)
-	{
-		error_at_node(ep,
-			"calling %s is not allowed inside a when condition\n", fsym->name);
-		return;
-	}
-
-	assert(fsym->params);
-	ppp = fsym->params;
-	ap = ep->func_args;
-	while (*ppp)
-	{
-		const struct param *pp = *ppp;
-		gen_code(", ");
-		if (!ap)
+		switch (ep->token.symbol)
 		{
-			if (pp->default_value)
-				gen_code("%s", pp->default_value);
+		case TOK_INCR:
+		case TOK_DECR:
+			if (ctxTest(context,C_STATIC))
+			{
+				error_at_node(ep, "this operator is not allowed here\n");
+				break;
+			}
+		case TOK_ADD:
+		case TOK_SUB:
+		case TOK_NOT:
+		case TOK_TILDE:
+		case TOK_SIZEOF:
+			gen_expr(context, expected, ep->pre_operand, level);
+			break;
+		case TOK_ASTERISK:
+			gen_expr(context, mk_pointer_type(expected), ep->pre_operand, level);
+			break;
+		case TOK_AMPERSAND:
+			if (expected->tag == T_POINTER)
+				expected = expected->val.pointer.value_type;
+			else if (expected->tag == T_ARRAY)
+				expected = expected->val.array.elem_type;
+			else if (expected->tag == T_PRIM && expected->val.prim == P_STRING)
+				expected = mk_prim_type(P_CHAR);
+			if (ctxTest(context, C_REENT))
+				gen_expr(context, expected, ep->pre_operand, level);
 			else
-			{
-				error_at_node(ep,
-					"not enough arguments to built-in function '%s'\n",
-					fsym->name);
-				return;
-			}
-		}
-		else
-		{
-			switch(pp->type)
-			{
-			case PT_OTHER:
-				gen_expr(context, ap, 0);
-				break;
-			case PT_EF:
-				gen_ef_arg(context, fsym->name, ap, n);
-				break;
-			case PT_PV:
-				gen_pv_arg(context, fsym->name, ap, n, FALSE);
-				break;
-			case PT_PV_ARRAY:
-				gen_pv_arg(context, fsym->name, ap, n, TRUE);
-				break;
-			}
-		}
-		ppp++;
-		n++;
-		if (ap)
-			ap = ap->next;
-	}
-	if (ap)
-		error_at_node(ep,
-			"too many arguments to built-in function '%s'\n", fsym->name);
-	gen_code(")");
-}
-
-/* Check an event flag argument */
-static void gen_ef_arg(
-	int		context,
-	const char	*func_name,	/* function name */
-	Node		*ap,		/* argument expression */
-	uint		index		/* argument index */
-)
-{
-	if (ap->tag == E_CONST && ap->extra.e_const->type == CT_EVFLAG)
-		gen_expr(context, ap, 0);
-	else if (ap->tag != E_VAR || ap->extra.e_var->type->tag != T_EVFLAG)
-		error_at_node(ap,
-			"argument %d to built-in function %s must be an event flag\n",
-			index, func_name);
-	else
-		gen_var_access(ap->extra.e_var);
-}
-
-static void gen_pv_arg(
-	int		context,
-	const char	*func_name,	/* function name */
-	Node		*ap,		/* argument expression */
-	uint		index,		/* argument index */
-	uint		pv_array	/* function expects a pv array */
-)
-{
-	Var *vp = 0;
-	Node *subscr = 0;
-
-	switch (ap->tag)
-	{
-	case E_VAR:
-		vp = ap->extra.e_var;
-		assert(vp);
-		if (vp->assign == M_MULTI && !pv_array)
-		{
-			error_at_node(ap,
-				"passing multi-PV array '%s' to function '%s' is no "
-				"longer allowed\n",
-				vp->name, func_name);
-			report_at_node(ap, "Perhaps you meant to pass '%s[0]' or "
-				"call the pvArray... variant?\n", vp->name);
-			return;
-		}
-		if (vp->assign == M_SINGLE && pv_array)
-		{
-			error_at_node(ap,
-				"passing single-PV variable '%s' to function '%s' is not "
-				"allowed\n",
-				vp->name, func_name);
-			return;
-		}
-		break;
-	case E_SUBSCR:
-		subscr = ap->subscr_index;
-		if (ap->subscr_operand->tag == E_VAR)
-		{
-			vp = ap->subscr_operand->extra.e_var;
+				gen_expr(ctxClear(context, C_STATIC), expected, ep->pre_operand, level);
 			break;
 		}
-		/* fall through */
-	default:
-		error_at_node(ap,
-			"parameter %d to '%s' must be a variable or subscripted variable\n",
-			index, func_name);
-		return;
-	}
-	assert(vp);
-
-	if (vp->assign == M_NONE)
-	{
-		error_at_node(ap,
-			"parameter %d to '%s' was not assigned to a pv\n",
-			index, func_name);
-		gen_code("?/*%s*/", vp->name);
-	}
-	else if (ap->tag == E_SUBSCR && vp->assign != M_MULTI)
-	{
-		error_at_node(ap,
-			"parameter %d to '%s' is subscripted but the variable "
-			"it refers to has not been assigned to multiple pvs\n",
-			index, func_name);
-		gen_code("%d/*%s*/", vp->index, vp->name);
-	}
-	else
-	{
-		gen_code("%d/*%s*/", vp->index, vp->name);
-	}
-
-	if (ap->tag == E_SUBSCR)
-	{
-		/* e.g. pvPut(xyz[i+2]); => seq_pvPut(ssId, 3 + (i+2)); */
-		gen_code(" + (CH_ID)(");
-		/* generate the subscript expression */
-		gen_expr(context, subscr, 0);
+		break;
+	case E_POST:
+		if (ctxTest(context,C_STATIC))
+		{
+			error_at_node(ep, "this operator is not allowed here\n");
+			break;
+		}
+		gen_expr(context, expected, ep->post_operand, level);
+		gen_code("%s", ep->token.str);
+		break;
+	case E_SIZEOF:
+		assert(ep->sizeof_decl);
+		assert(ep->sizeof_decl->extra.e_decl);
+		assert(ep->sizeof_decl->extra.e_decl->type);
+		gen_code("sizeof(");
+		gen_var_decl(ep->sizeof_decl->extra.e_decl);
 		gen_code(")");
+		break;
+	default:
+		error_at_node(ep, "unhandled expression (%s:%s)\n",
+			node_name(ep), ep->token.str);
+		assert(impossible);
 	}
 }
 
-static void gen_var_init(Var *vp, int context, int level)
+static void gen_var_init(Var *vp, uint context, int level)
 {
 	assert(vp);
 	assert(vp->decl);
@@ -716,24 +797,52 @@ static void gen_var_init(Var *vp, int context, int level)
 	{
 		indent(level); gen_code("{\n");
 		gen_line_marker(vp->decl->decl_init);
-		indent(level); gen_code("static ");
+		indent(level);
+		if (ctxTest(context,C_REENT))
+			gen_code("static ");
 		gen_type(vp->type, NM_INITVAR, vp->name);
 		gen_code(" = ");
-		gen_expr(context, vp->decl->decl_init, level);
+		gen_expr(context, strip_pv_type(vp->type), vp->decl->decl_init, level);
 		gen_code(";\n");
 		indent(level); gen_code("memcpy(&");
-		gen_var_access(vp);
+		gen_var_access(context, vp);
 		gen_code(", &" NM_INITVAR "%s, sizeof(" NM_INITVAR "%s));\n",
 			vp->name, vp->name);
 		indent(level); gen_code("}\n");
 	}
 }
 
-/* Generate initializers for variables of global lifetime */
-static void gen_user_var_init(Node *prog, int level)
+static void gen_chid_init(uint context, Var *vp, int level)
 {
-	Var *vp;
-	Node *ssp;
+	assert(vp->decl);
+	if (vp->type->tag == T_PV)
+	{
+		indent(level);
+		gen_var_access(ctxSet(context,C_CHID), vp);
+		gen_code(" = %d;\n", vp->index);
+	}
+	else if (vp->type->tag == T_ARRAY)
+	{
+		int i;
+		for (i=0; i<vp->type->val.array.num_elems; i++)
+		{
+			indent(level);
+			gen_var_access(ctxSet(context,C_CHID), vp);
+			gen_code("[%d] = %d;\n", i, vp->index +i);
+		}
+	}
+#if 0
+	else if (t->tag == T_STRUCT)
+	{
+	}
+#endif
+}
+
+/* Generate initializers for variables of global lifetime */
+static void gen_user_var_init(uint context, Node *prog, int level)
+{
+	Var	*vp;
+	Node	*ssp;
 
 	assert(prog->tag == D_PROG);
 	/* global variables */
@@ -743,11 +852,20 @@ static void gen_user_var_init(Node *prog, int level)
 		{
 			assert(vp->type->tag != T_NONE);	/* syntax */
 			if (vp->type->tag == T_EVFLAG)
-				error_at_node(vp->decl->decl_init,
-					"event flag '%s' cannot be initialized\n",
-					vp->name);
+			{
+				indent(level);
+				gen_code("seq_efInit(" NM_ENV ", ");
+				gen_var_access(context, vp);
+				gen_code(", ");
+				gen_expr(context, mk_bool_type(), vp->decl->decl_init, level);
+				gen_code(");\n");
+			}
 			else
-				gen_var_init(vp, C_GLOBAL, level);
+				gen_var_init(vp, ctxSet(context,C_STATIC), level);
+		}
+		if (type_contains_pv(vp->type))
+		{
+			gen_chid_init(context, vp, level);
 		}
 	}
 	/* state and state set variables */
@@ -759,7 +877,11 @@ static void gen_user_var_init(Node *prog, int level)
 		/* state set variables */
 		foreach(vp, ssp->extra.e_ss->var_list->first)
 		{
-			gen_var_init(vp, C_SS, level);
+			gen_var_init(vp, ctxSet(context,C_STATIC), level);
+			if (type_contains_pv(vp->type))
+			{
+				gen_chid_init(context, vp, level);
+			}
 		}
 		foreach (sp, ssp->ss_states)
 		{
@@ -767,60 +889,66 @@ static void gen_user_var_init(Node *prog, int level)
 			/* state variables */
 			foreach (vp, sp->extra.e_state->var_list->first)
 			{
-				gen_var_init(vp, C_SS, level);
+				gen_var_init(vp, ctxSet(context,C_STATIC), level);
+				if (type_contains_pv(vp->type))
+				{
+					gen_chid_init(context, vp, level);
+				}
 			}
 		}
 	}
 }
 
 static void gen_prog_func(
+	uint context,
 	Node *prog,
 	const char *doc,
 	const char *name,
-	void (*gen_body)(Node *prog)
+	void (*gen_body)(uint context, Node *prog)
 )
 {
 	assert(prog->tag == D_PROG);
 	gen_code("\n/* Program %s func */\n", doc);
 	gen_code("static void %s(PROG_ID " NM_ENV ")\n{\n",
 		name);
-	gen_body(prog);
+	gen_body(context, prog);
 	gen_code("}\n");
 }
 
 static void gen_prog_entex_func(
+	uint context,
 	Node *prog,
 	const char *doc,
 	const char *name,
-	void (*gen_body)(Node *)
+	void (*gen_body)(uint context, Node *)
 )
 {
 	assert(prog->tag == D_PROG);
 	gen_code("\n/* Program %s func */\n", doc);
 	gen_code("static void %s(SS_ID " NM_ENV ")\n",
 		name);
-	gen_body(prog);
+	gen_body(context, prog);
 }
 
-static void gen_prog_init_body(Node *prog)
+static void gen_prog_init_body(uint context, Node *prog)
 {
 	assert(prog->tag == D_PROG);
-	gen_user_var_init(prog, 1);
+	gen_user_var_init(context, prog, 1);
 }
 
-static void gen_prog_entry_body(Node *prog)
+static void gen_prog_entry_body(uint context, Node *prog)
 {
 	assert(prog->tag == D_PROG);
-	gen_entex_body(prog->prog_entry, C_SS);
+	gen_entex_body(context, prog->prog_entry);
 }
 
-static void gen_prog_exit_body(Node *prog)
+static void gen_prog_exit_body(uint context, Node *prog)
 {
 	assert(prog->tag == D_PROG);
-	gen_entex_body(prog->prog_exit, C_SS);
+	gen_entex_body(context, prog->prog_exit);
 }
 
-void gen_funcdef(Node *fp)
+void gen_funcdef(uint context, Node *fp)
 {
 	if (fp->tag == D_FUNCDEF)
 	{
@@ -832,7 +960,9 @@ void gen_funcdef(Node *fp)
 		gen_code("static ");
 		gen_var_decl(vp);
 		gen_code("\n");
-		gen_block(fp->funcdef_block, C_FUNC, 0);
-		gen_code("#undef " NM_VAR "\n");
+		gen_block(ctxSet(context,C_FUNC),
+			vp->type->val.function.return_type,
+			fp->funcdef_block, 0);
+		gen_code("#undef " NM_VAR);
 	}
 }

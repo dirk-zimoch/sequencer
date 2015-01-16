@@ -4,15 +4,15 @@ in the file LICENSE that is included with this distribution.
 \*************************************************************************/
 program exOpt_DuplOptTest
 float v;
-assign v to "grw:xxxExample";
+assign v;
 monitor v;
 
 ss ss1 {
     state low {
         option + t;
         entry {
-            printf("Will do this on entry");
-            printf("Another thing to do on entry");
+            float x = DEFAULT;
+            printf("v = %f, x = %f\n", v, x);
         }
         when(v > 5.0) {
             printf("now changing to high\n");

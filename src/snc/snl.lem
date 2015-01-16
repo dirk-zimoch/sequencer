@@ -199,7 +199,7 @@ init_declarators(r) ::= init_declarators(xs) COMMA init_declarator(x).
 
 init_declarator(r) ::= declarator(x).			{ r = x; }
 init_declarator(r) ::= declarator(x) EQUAL(t) init_expr(i).
-							{ r = node(E_BINOP, t, x, i); }
+							{ r = node(E_ASSOP, t, x, i); }
 
 declarator(r) ::= variable(n).				{ r = node(E_VAR, n); }
 declarator(r) ::= declarator(x) subscript(s).	[POST]	{ r = node(E_SUBSCR, s, x, node(E_CONST, s)); }
@@ -208,13 +208,14 @@ declarator(r) ::= declarator(x)
 declarator(r) ::= LPAREN declarator(x) RPAREN.	[PRE]	{ r = x; }
 declarator(r) ::= ASTERISK(t) declarator(x).	[PRE]	{ r = node(E_PRE, t, x); }
 declarator(r) ::= CONST(t) declarator(x).	[PRE]	{ r = node(E_PRE, t, x); }
+declarator(r) ::= PV(t) declarator(x).		[PRE]	{ r = node(E_PRE, t, x); }
 
 param_decls(r) ::= .					{ r = 0; }
 param_decls(r) ::= param_decl(x).			{ r = x; }
 param_decls(r) ::= param_decls(xs) COMMA param_decl(x).	{ r = link_node(xs, x); }
 
 // allow parameter declaration with or without identifier
-param_decl(r) ::= basetype(t) declarator(d).		{ r = mk_decl(d, t); }
+param_decl(r) ::= basetype(t) init_declarator(d).	{ r = mk_decl(d, t); }
 param_decl(r) ::= type_expr(x).				{ r = x; }
 
 // deprecated
@@ -245,6 +246,7 @@ prim_type(r) ::= LONG.				{ r = P_LONG; }
 prim_type(r) ::= UNSIGNED CHAR.			{ r = P_UCHAR; }
 prim_type(r) ::= UNSIGNED SHORT.		{ r = P_USHORT; }
 prim_type(r) ::= UNSIGNED INT.			{ r = P_UINT; }
+prim_type(r) ::= UNSIGNED.			{ r = P_UINT; }
 prim_type(r) ::= UNSIGNED LONG.			{ r = P_ULONG; }
 prim_type(r) ::= INT8T.				{ r = P_INT8T; }
 prim_type(r) ::= UINT8T.			{ r = P_UINT8T; }
@@ -274,6 +276,8 @@ abs_decl(r) ::= ASTERISK(t). [PRE]		{ r = node(E_PRE, t, 0); }
 abs_decl(r) ::= ASTERISK(t) abs_decl(d). [PRE]	{ r = node(E_PRE, t, d); }
 abs_decl(r) ::= CONST(t). [PRE]			{ r = node(E_PRE, t, 0); }
 abs_decl(r) ::= CONST(t) abs_decl(d). [PRE]	{ r = node(E_PRE, t, d); }
+abs_decl(r) ::= PV(t). [PRE]			{ r = node(E_PRE, t, 0); }
+abs_decl(r) ::= PV(t) abs_decl(d). [PRE]	{ r = node(E_PRE, t, d); }
 abs_decl(r) ::= subscript(s). [POST]		{ r = node(E_SUBSCR, s, 0, node(E_CONST, s)); }
 abs_decl(r) ::= abs_decl(d) subscript(s). [POST]{ r = node(E_SUBSCR, s, d, node(E_CONST, s)); }
 abs_decl(r) ::= LPAREN(t) param_decls(ps) RPAREN. [POST]
@@ -415,7 +419,7 @@ expr(r) ::= variable(v).			{ r = node(E_VAR, v); }
 expr(r) ::= LPAREN(t) comma_expr(x) RPAREN.		{ r = node(E_PAREN,  t, x); }
 expr(r) ::= expr(x) LPAREN(t) args(y) RPAREN.		{ r = node(E_FUNC,   t, x, y); }
 expr(r) ::= EXIT(n) LPAREN(t) args(y) RPAREN.		{ r = node(E_FUNC,   t, node(E_VAR, n), y); }
-expr(r) ::= SIZEOF(n) LPAREN(t) type_expr(y) RPAREN.	{ r = node(E_FUNC,   t, node(E_VAR, n), y); }
+expr(r) ::= SIZEOF(n) LPAREN type_expr(y) RPAREN.	{ r = node(E_SIZEOF, n, y); }
 expr(r) ::= expr(x) LBRACKET(t) expr(y) RBRACKET.	{ r = node(E_SUBSCR, t, x, y); }
 expr(r) ::= expr(x) PERIOD(t) member(y).		{ r = node(E_SELECT, t, x, y); }
 expr(r) ::= expr(x) POINTER(t) member(y).		{ r = node(E_SELECT, t, x, y); }
@@ -437,8 +441,8 @@ expr(r) ::= SIZEOF(t)	expr(x). [PRE]		{ r = node(E_FUNC, t, node(E_VAR, t), x); 
 expr(r) ::= LPAREN(t) type_expr(c) RPAREN expr(x). [PRE] { r = node(E_CAST, t, c, x); }
 
 // Binary Operators, left-to-right
-expr(r) ::= expr(x) SUB(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
 expr(r) ::= expr(x) ADD(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
+expr(r) ::= expr(x) SUB(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
 expr(r) ::= expr(x) ASTERISK(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
 expr(r) ::= expr(x) SLASH(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
 expr(r) ::= expr(x) GT(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
@@ -461,17 +465,17 @@ expr(r) ::= expr(c) QUESTION(t) expr(th) COLON expr(el).
 						{ r = node(E_TERNOP, t, c, th, el); }
 
 // Assignment Operators, right-to-left
-expr(r) ::= expr(x) EQUAL(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
-expr(r) ::= expr(x) ADDEQ(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
-expr(r) ::= expr(x) SUBEQ(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
-expr(r) ::= expr(x) ANDEQ(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
-expr(r) ::= expr(x) OREQ(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
-expr(r) ::= expr(x) DIVEQ(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
-expr(r) ::= expr(x) MULEQ(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
-expr(r) ::= expr(x) MODEQ(t) 	expr(y).	{ r = node(E_BINOP, t, x, y); }
-expr(r) ::= expr(x) LSHEQ(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
-expr(r) ::= expr(x) RSHEQ(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
-expr(r) ::= expr(x) XOREQ(t)	expr(y).	{ r = node(E_BINOP, t, x, y); }
+expr(r) ::= expr(x) EQUAL(t)	expr(y).	{ r = node(E_ASSOP, t, x, y); }
+expr(r) ::= expr(x) ADDEQ(t)	expr(y).	{ r = node(E_ASSOP, t, x, y); }
+expr(r) ::= expr(x) SUBEQ(t)	expr(y).	{ r = node(E_ASSOP, t, x, y); }
+expr(r) ::= expr(x) ANDEQ(t)	expr(y).	{ r = node(E_ASSOP, t, x, y); }
+expr(r) ::= expr(x) OREQ(t)	expr(y).	{ r = node(E_ASSOP, t, x, y); }
+expr(r) ::= expr(x) DIVEQ(t)	expr(y).	{ r = node(E_ASSOP, t, x, y); }
+expr(r) ::= expr(x) MULEQ(t)	expr(y).	{ r = node(E_ASSOP, t, x, y); }
+expr(r) ::= expr(x) MODEQ(t) 	expr(y).	{ r = node(E_ASSOP, t, x, y); }
+expr(r) ::= expr(x) LSHEQ(t)	expr(y).	{ r = node(E_ASSOP, t, x, y); }
+expr(r) ::= expr(x) RSHEQ(t)	expr(y).	{ r = node(E_ASSOP, t, x, y); }
+expr(r) ::= expr(x) XOREQ(t)	expr(y).	{ r = node(E_ASSOP, t, x, y); }
 
 // Comma, left-to-right
 comma_expr(r) ::= comma_expr(xs) COMMA(t) expr(x).	{ r = node(E_BINOP, t, xs, x); }
@@ -495,6 +499,9 @@ member(r) ::= NAME(t).				{ r = node(E_MEMBER, t); }
 funcdef(r) ::= basetype(t) declarator(d) block(b). {
 	r = node(D_FUNCDEF, d->token, mk_decl(d, t), b);
 }
+funcdef(r) ::= EXTERN(k) basetype(t) declarator(d) block(b). {
+	r = node(D_FUNCDEF, k, mk_decl(d, t), b);
+}
 
 // Struct Definitions
 
@@ -516,7 +523,7 @@ choices(r) ::= choices(xs) COMMA choice(x).	{ r = link_node(xs, x); }
 choices(r) ::= choice(x).			{ r = x; }
 
 choice(r) ::= NAME(c).				{ r = node(E_VAR, c); }
-choice(r) ::= NAME(c) EQUAL(o) expr(i).	{ r = node(E_BINOP, o, node(E_VAR, c), i); }
+choice(r) ::= NAME(c) EQUAL(o) expr(i).		{ r = node(E_ASSOP, o, node(E_VAR, c), i); }
 choice(r) ::= NAME(c) error. {
 	r = node(E_VAR, c);
 	report("expected '=' or ',' or '}'\n");

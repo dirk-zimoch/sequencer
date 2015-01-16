@@ -35,7 +35,6 @@ typedef struct event_mask_args {
 	uint	num_event_flags;
 } event_mask_args;
 
-static void gen_channel_table(ChanList *chan_list, uint num_event_flags, int opt_reent);
 static void gen_channel(Chan *cp, uint num_event_flags, int opt_reent);
 static void gen_state_table(Node *ss_list, uint num_event_flags, uint num_channels);
 static void fill_state_struct(Node *sp, char *ss_name, uint ss_num);
@@ -52,14 +51,13 @@ static int iter_event_mask_array(Node *ep, Node *scope, void *parg);
 void gen_tables(Program *p)
 {
 	gen_code("\n/************************ Tables ************************/\n");
-	gen_channel_table(p->chan_list, p->num_event_flags, p->options.reent);
 	gen_state_table(p->prog->prog_statesets, p->num_event_flags, p->chan_list->num_elems);
 	gen_ss_table(p->prog->prog_statesets);
 	gen_prog_table(p);
 }
 
 /* Generate channel table with data for each defined channel */
-static void gen_channel_table(ChanList *chan_list, uint num_event_flags, int opt_reent)
+void gen_channel_table(ChanList *chan_list, uint num_event_flags, int opt_reent)
 {
 	Chan *cp;
 

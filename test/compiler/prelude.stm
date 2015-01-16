@@ -1,0 +1,165 @@
+enum pvStat {
+    /* generic OK and error status */
+    pvStatOK            = 0,
+    pvStatERROR         = -1,
+    pvStatDISCONN       = -2,
+
+    /* correspond to EPICS alarm status */
+    pvStatREAD          = 1,
+    pvStatWRITE         = 2,
+    pvStatHIHI          = 3,
+    pvStatHIGH          = 4,
+    pvStatLOLO          = 5,
+    pvStatLOW           = 6,
+    pvStatSTATE         = 7,
+    pvStatCOS           = 8,
+    pvStatCOMM          = 9,
+    pvStatTIMEOUT       = 10,
+    pvStatHW_LIMIT      = 11,
+    pvStatCALC          = 12,
+    pvStatSCAN          = 13,
+    pvStatLINK          = 14,
+    pvStatSOFT          = 15,
+    pvStatBAD_SUB       = 16,
+    pvStatUDF           = 17,
+    pvStatDISABLE       = 18,
+    pvStatSIMM          = 19,
+    pvStatREAD_ACCESS   = 20,
+    pvStatWRITE_ACCESS  = 21
+};
+
+enum pvSevr {
+    /* generic OK and error severities */
+    pvSevrOK            = 0,
+    pvSevrERROR         = -1,
+
+    /* correspond to EPICS severities */
+    pvSevrNONE          = 0,
+    pvSevrMINOR         = 1,
+    pvSevrMAJOR         = 2,
+    pvSevrINVALID       = 3
+};
+
+%{
+enum bool { false, true };
+}%
+
+#if 0
+/* I/O completion type */
+enum compType { DEFAULT, ASYNC, SYNC };
+
+double DEFAULT_TIMEOUT = 10.0;      /* default timeout for SYNC operations */
+#endif
+
+/* Built-in Functions */
+
+/* event flag operations */
+extern void efSet(evflag ef) {
+    %%seq_efSet(_seq_ss, ef);
+}
+extern enum bool efTest(evflag ef) {
+    %%return seq_efTest(_seq_ss, ef);
+}
+extern enum bool efClear(evflag ef) {
+    %%return seq_efClear(_seq_ss, ef);
+}
+extern enum bool efTestAndClear(evflag ef) {
+    %%return seq_efTestAndClear(_seq_ss, ef);
+}
+
+/* pv operations */
+extern enum pvStat pvGet(void pv *x, enum compType ct, double tmo /* = 10.0 */) {
+    %%return seq_pvGet(_seq_ss, *_seq_chid_x, ct, tmo);
+}
+#if 0
+enum pvStat pvGetMultiple(void pv, unsigned, enum compType) {
+    %%seq_
+}
+enum bool   pvGetQ(void pv) {
+    %%seq_
+}
+void        pvFlushQ(void pv) {
+    %%seq_
+}
+enum pvStat pvPut(void pv, enum compType, double tmo) {
+    %%seq_
+}
+enum pvStat pvPutMultiple(void pv, unsigned, enum compType) {
+    %%seq_
+}
+enum bool   pvGetComplete(void pv, unsigned, enum bool, enum bool*) {
+    %%seq_
+}
+enum bool   pvPutComplete(void pv, unsigned, enum bool, enum bool*) {
+    %%seq_
+}
+void        pvGetCancel(void pv, unsigned) {
+    %%seq_
+}
+void        pvPutCancel(void pv, unsigned) {
+    %%seq_
+}
+enum pvStat pvAssign(void pv, char const *) {
+    %%seq_
+}
+enum pvStat pvMonitor(void pv, unsigned) {
+    %%seq_
+}
+void        pvSync(void pv, unsigned, evflag) {
+    %%seq_
+}
+enum pvStat pvStopMonitor(void pv, unsigned) {
+    %%seq_
+}
+
+/* pv info */
+char*       pvName(void pv) {
+    %%seq_
+}
+unsigned    pvCount(void pv) {
+    %%seq_
+}
+enum pvStat pvStatus(void pv) {
+    %%seq_
+}
+enum pvSevr pvSeverity(void pv) {
+    %%seq_
+}
+char const* pvMessage(void pv) {
+    %%seq_
+}
+enum bool   pvAssigned(void pv) {
+    %%seq_
+}
+enum bool   pvConnected(void pv) {
+    %%seq_
+}
+struct epicsTimeStamp pvTimeStamp(void pv) {
+    %%seq_
+}
+
+/* global operations */
+void        pvFlush() {
+    %%seq_
+}
+enum bool   delay(double) {
+    %%seq_
+}
+char*       macValueGet(char const *) {
+    %%seq_
+}
+
+/* program wide info */
+unsigned    pvChannelCount() {
+    %%seq_
+}
+unsigned    pvConnectCount() {
+    %%seq_
+}
+unsigned    pvAssignCount() {
+    %%seq_
+}
+enum bool   optGet(char const *) {
+    %%seq_
+}
+#endif

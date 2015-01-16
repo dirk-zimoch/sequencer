@@ -127,8 +127,8 @@ enum node_tag			/* description [child nodes...] */
 	D_SYNCQ,		/* syncq statement [subscr,evflag,maxqsize] */
 	D_WHEN,			/* when statement [cond,block] */
 
+	E_ASSOP,		/* assignment operator [left,right] */
 	E_BINOP,		/* binary operator [left,right] */
-	E_BUILTIN,		/* builtin function [] */
 	E_CAST,			/* type cast [type,operand] */
 	E_CONST,		/* numeric (inkl. character) constant [] */
 	E_FUNC,			/* function call [expr,args] */
@@ -138,6 +138,7 @@ enum node_tag			/* description [child nodes...] */
 	E_POST,			/* unary postfix operator [operand] */
 	E_PRE,			/* unary prefix operator [operand] */
 	E_SELECT,		/* member selection [left,right] */
+	E_SIZEOF,		/* sizeof [decl] */
 	E_STRING,		/* string constant [] */
 	E_SUBSCR,		/* subscripted expr [operand,index] */
 	E_TERNOP,		/* ternary operator [cond,then,else] */
@@ -178,9 +179,8 @@ struct syntax_node			/* generic syntax node */
 		When	*e_when;	/* transition data */
 		Node	*e_change;	/* declaration of target state */
 		VarList	*e_cmpnd;	/* block local declarations */
-		FuncSym	*e_builtin;	/* builtin function */
-		ConstSym *e_const;	/* builtin constant */
 		VarList *e_funcdef;	/* parameters */
+		Type	*e_cast;	/* the type to cast to */
 	}	extra;
 };
 
@@ -285,24 +285,26 @@ struct program
 
 /* Commonly used sets of syntax_node tags */
 
-/* Expression types that are scopes. By definition, a scope is a node
+/* Node types that are scopes. By definition, a scope is a node
    that allows variable declarations as (immediate) subnodes. */
 #define scope_mask		( bit(D_PROG)    | bit(D_FUNCDEF) \
 				| bit(D_SS)      | bit(D_STATE)   | bit(S_CMPND) )
+
 /* Whether a node is a scope */
 #define is_scope(e)		((bit((e)->tag) & scope_mask) != 0)
 
-/* Expression types that may have sub-scopes */
-#define has_sub_scope_mask	( bit(D_ENTEX)   | bit(D_FUNCDEF) | bit(D_PROG)   | bit(D_SS)\
-				| bit(D_STATE)   | bit(D_WHEN)    | bit(S_CMPND)  | bit(S_FOR)\
-				| bit(S_IF)      | bit(S_STMT)    | bit(S_WHILE) )
-/* Node types that are expressions i.e. no definitions or statements.
+/* Nodes that may have sub-scopes */
+#define has_sub_scope_mask	( bit(D_ENTEX)	| bit(D_FUNCDEF) | bit(D_PROG)   | bit(D_SS)\
+				| bit(D_STATE)	| bit(D_WHEN)    | bit(S_CMPND)  | bit(S_FOR)\
+				| bit(S_IF)	| bit(S_STMT)    | bit(S_WHILE) )
+
+/* Nodes that are actually expressions i.e. no definitions or statements.
    These are the ones that start with E_. */
-#define	expr_mask		( bit(E_BINOP)   | bit(E_CAST)    | bit(E_CONST)\
-				| bit(E_FUNC)    | bit(E_INIT)\
-				| bit(E_PAREN)   | bit(E_POST)    | bit(E_PRE)\
-				| bit(E_SELECT)	 | bit(E_STRING)\
-				| bit(E_SUBSCR)  | bit(E_TERNOP)  | bit(E_VAR)    | bit(T_TEXT) )
+#define	expr_mask		( bit(E_ASSOP)	| bit(E_BINOP)	 | bit(E_CAST)    | bit(E_CONST)\
+				| bit(E_FUNC)	| bit(E_INIT)\
+				| bit(E_PAREN)	| bit(E_POST)    | bit(E_PRE)\
+				| bit(E_SELECT)	| bit(E_STRING)\
+				| bit(E_SUBSCR)	| bit(E_TERNOP)  | bit(E_VAR) )
 
 #define node_name(e)		node_info[(e)->tag].name
 
@@ -317,6 +319,8 @@ enum multiplicity
 /* Accessors for child expressions */
 #define assign_subscr	children[0]
 #define assign_pvs	children[1]
+#define assop_left	children[0]
+#define assop_right	children[1]
 #define binop_left	children[0]
 #define binop_right	children[1]
 #define cast_type	children[0]
@@ -351,6 +355,7 @@ enum multiplicity
 #define return_expr	children[0]
 #define select_left	children[0]
 #define select_right	children[1]
+#define sizeof_decl	children[0]
 #define ss_defns	children[0]
 #define ss_states	children[1]
 #define state_defns	children[0]
@@ -401,8 +406,8 @@ node_info[]
 	{ "D_SYNC",	2 },
 	{ "D_SYNCQ",	3 },
 	{ "D_WHEN",	2 },
+	{ "E_ASSOP",	2 },
 	{ "E_BINOP",	2 },
-	{ "E_BUILTIN",	0 },
 	{ "E_CAST",	2 },
 	{ "E_CONST",	0 },
 	{ "E_FUNC",	2 },
@@ -412,6 +417,7 @@ node_info[]
 	{ "E_POST",	1 },
 	{ "E_PRE",	1 },
 	{ "E_SELECT",	2 },
+	{ "E_SIZEOF",	1 },
 	{ "E_STRING",	0 },
 	{ "E_SUBSCR",	2 },
 	{ "E_TERNOP",	3 },

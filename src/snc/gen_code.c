@@ -15,6 +15,7 @@ in the file LICENSE that is included with this distribution.
 #include <string.h>
 #include <assert.h>
 
+#include "node.h"
 #include "analysis.h"
 #include "gen_ss_code.h"
 #include "gen_tables.h"
@@ -28,7 +29,7 @@ static void gen_main(char *prog_name);
 static void gen_var_struct(Node *prog, uint opt_reent);
 static void gen_init_reg(char *prog_name);
 static void gen_func_decls(Node *prog);
-static void gen_global_defn(Node *defn);
+static void gen_global_defn(uint ctx, Node *ep);
 
 static int assert_var_declared(Node *ep, Node *scope, void *parg)
 {
@@ -38,8 +39,12 @@ static int assert_var_declared(Node *ep, Node *scope, void *parg)
 #endif
 	assert(ep->tag == E_VAR);
 	assert(ep->extra.e_var != 0);
+#if 0
 	assert(ep->extra.e_var->decl != 0 ||
-		ep->extra.e_var->type->tag == T_NONE);
+		ep->extra.e_var->type->tag == T_NONE ||
+		
+	);
+#endif
 	return TRUE;		/* there are no children anyway */
 }
 
@@ -47,6 +52,7 @@ static int assert_var_declared(Node *ep, Node *scope, void *parg)
 void generate_code(Program *p)
 {
 	Node *defn;
+	uint ctx;
 
 	/* assume there have been no errors, so all vars are declared */
 	traverse_syntax_tree(p->prog, bit(E_VAR), 0, 0, assert_var_declared, 0);
@@ -62,30 +68,36 @@ void generate_code(Program *p)
 	/* Includes */
 	gen_code("#include <string.h>\n");
 	gen_code("#include <stddef.h>\n");
+	gen_code("#include <stdlib.h>\n");
 	gen_code("#include <stdio.h>\n");
 	gen_code("#include <limits.h>\n");
 	gen_code("\n");
 	gen_code("#include \"seq_snc.h\"\n");
 
+	ctx = default_context(p->options);
+
 	/* Initial definitions *except* global variable declarations,
 	   in the order in which they appear in the program.
 	   Note: this includes escaped C code. */
-	foreach (defn, p->prog->prog_defns) gen_global_defn(defn);
+	foreach (defn, p->prog->prog_defns) gen_global_defn(ctx, defn);
 
 	/* Variable declarations */
 	gen_var_struct(p->prog, p->options.reent);
+
+	gen_channel_table(p->chan_list, p->num_event_flags, p->options.reent);
+
 
 	/* Function declarations */
 	gen_func_decls(p->prog);
 
 	/* State and state set functions */
-	gen_ss_code(p->prog, p->options);
+	gen_ss_code(ctx, p->prog);
 
 	/* Channel, state set, and program tables */
 	gen_tables(p);
 
 	/* Extra definitions */
-	foreach (defn, p->prog->prog_xdefns) gen_global_defn(defn);
+	foreach (defn, p->prog->prog_xdefns) gen_global_defn(ctx, defn);
 
 	/* Main function */
 	if (p->options.main) gen_main(p->name);
@@ -99,6 +111,11 @@ static void gen_main(char *prog_name)
 {
 	gen_code("\n#define PROG_NAME %s\n", prog_name);
 	gen_code("#include \"seqMain.c\"\n");
+}
+
+static void gen_pv_decl(Var *vp)
+{
+	gen_pv_type(vp->type, "", vp->name);
 }
 
 void gen_var_decl(Var *vp)
@@ -126,6 +143,37 @@ static void gen_func_decls(Node *prog)
 	}
 }
 
+static void gen_var_and_pv_decl(Var *vp, int level)
+{
+	/* C variable declaration */
+#if 0
+	if (vp->type->tag != T_POINTER || !type_contains_pv(vp->type))
+	{
+#endif
+		gen_line_marker(vp->decl);
+		if (level)
+			indent(level);
+		else
+			gen_code("static ");
+		gen_var_decl(vp);
+		gen_code(";\n");
+#if 0
+	}
+#endif
+
+	/* channel declaration */
+	if (type_contains_pv(vp->type))
+	{
+		gen_line_marker(vp->decl);
+		if (level)
+			indent(level);
+		else
+			gen_code("static ");
+		gen_pv_decl(vp);
+		gen_code(";\n");
+	}
+}
+
 /* Generate the struct containing all program variables with
    'infinite' (global) lifetime. These are: variables declared at the
    top-level, inside a state set, and inside a state. Note that state
@@ -137,117 +185,46 @@ static void gen_var_struct(Node *prog, uint opt_reent)
 {
 	Var	*vp;
 	Node	*sp, *ssp;
-	uint	num_globals = 0;
-	uint	num_decls = 0;
+	int	level = opt_reent;
 
 	gen_code("\n/* Variable declarations */\n");
-
 	if (opt_reent)
 	{
 		gen_code("struct %s {\n", NM_VARS);
+		indent(1); gen_code("char "NM_DUMMY";\n");
 	}
-	/* Convert internal type to `C' type */
 	foreach (vp, var_list_from_scope(prog)->first)
 	{
-		if (vp->decl && vp->type->tag != T_NONE && vp->type->tag != T_EVFLAG &&
-			vp->type->tag != T_FUNCTION)
-		{
-			gen_line_marker(vp->decl);
-			if (!opt_reent) gen_code("static");
-			indent(1);
-			gen_var_decl(vp);
-			num_decls++;
-			gen_code(";\n");
-			num_globals++;
-		}
-	}
-	if (opt_reent && !num_globals)
-	{
-		indent(1); gen_code("char "NM_DUMMY";\n");
+		if (vp->decl && vp->type->tag != T_NONE && vp->type->tag != T_EVFLAG && vp->type->tag != T_FUNCTION)
+			gen_var_and_pv_decl(vp, level);
 	}
 	foreach (ssp, prog->prog_statesets)
 	{
-		int level = opt_reent;
-		int ss_empty = !ssp->extra.e_ss->var_list->first;
-
-		if (ss_empty)
+		indent(level);
+		if (!opt_reent)
+			gen_code("static ");
+		gen_code("struct %s_%s {\n", NM_VARS, ssp->token.str);
+		indent(level+1); gen_code("char "NM_DUMMY";\n");
+		foreach (vp, ssp->extra.e_ss->var_list->first)
+			gen_var_and_pv_decl(vp, level+1);
+		foreach (sp, ssp->ss_states)
 		{
-			foreach (sp, ssp->ss_states)
-			{
-				if (sp->extra.e_state->var_list->first)
-				{
-					ss_empty = 0;
-					break;
-				}
-			}
+			indent(level+1); gen_code("struct {\n");
+			indent(level+2); gen_code("char "NM_DUMMY";\n");
+			foreach (vp, sp->extra.e_state->var_list->first)
+				gen_var_and_pv_decl(vp, level+2);
+			indent(level+1);
+			gen_code("} %s_%s;\n", NM_VARS, sp->token.str);
 		}
-
-		if (!ss_empty)
-		{
-			indent(level); gen_code("struct %s_%s {\n", NM_VARS, ssp->token.str);
-			foreach (vp, ssp->extra.e_ss->var_list->first)
-			{
-				gen_line_marker(vp->decl);
-				indent(level+1); gen_var_decl(vp); gen_code(";\n");
-				num_decls++;
-			}
-			foreach (sp, ssp->ss_states)
-			{
-				int s_empty = !sp->extra.e_state->var_list->first;
-				if (!s_empty)
-				{
-					indent(level+1);
-					gen_code("struct {\n");
-					foreach (vp, sp->extra.e_state->var_list->first)
-					{
-						gen_line_marker(vp->decl);
-						indent(level+2); gen_var_decl(vp); gen_code(";\n");
-						num_decls++;
-					}
-					indent(level+1);
-					gen_code("} %s_%s;\n", NM_VARS, sp->token.str);
-				}
-			}
-			indent(level); gen_code("} %s_%s", NM_VARS, ssp->token.str);
-			gen_code(";\n");
-		}
+		indent(level); gen_code("} %s_%s", NM_VARS, ssp->token.str);
+		gen_code(";\n");
 	}
 	if (opt_reent)
-	{
-		if (!num_decls)
-		{
-			indent(1); gen_code("char dummy;\n");
-		}
 		gen_code("};\n");
-	}
 	gen_code("\n");
 }
 
-/* Generate C code in definition section */
-void gen_defn_c_code(Node *scope, int level)
-{
-	Node	*ep;
-	int	first = TRUE;
-	Node	*defn_list = defn_list_from_scope(scope);
-
-	foreach (ep, defn_list)
-	{
-		if (ep->tag == T_TEXT)
-		{
-			if (first)
-			{
-				first = FALSE;
-				indent(level);
-				gen_code("/* C code definitions */\n");
-			}
-			gen_line_marker(ep);
-			indent(level);
-			gen_code("%s\n", ep->token.str);
-		}
-	}
-}
-
-static void gen_global_defn(Node *ep)
+static void gen_global_defn(uint ctx, Node *ep)
 {
 	Node *member;
 	Var *vp;
@@ -262,7 +239,7 @@ static void gen_global_defn(Node *ep)
 		/* TODO: generate enum definition */
 		break;
 	case D_FUNCDEF:
-		gen_funcdef(ep);
+		gen_funcdef(ctx, ep);
 		break;
 	case D_STRUCTDEF:
 		gen_code("\nstruct %s {\n", ep->token.str);
@@ -280,8 +257,9 @@ static void gen_global_defn(Node *ep)
 				gen_code("%s\n", member->token.str);
 				break;
 			default:
-				assert_at_node(impossible, member, "member->tag==%s\n",
+				error_at_node(member, "member->tag==%s\n",
 					node_name(member));
+				assert(impossible);
 			}
 		}
 		gen_code("};\n");
@@ -294,7 +272,7 @@ static void gen_global_defn(Node *ep)
 			gen_line_marker(vp->decl);
 			gen_code("static const EF_ID %s = %d;\n", vp->name, vp->chan.evflag->index);
 		}
-                break;
+		break;
 	case D_ASSIGN:
 	case D_MONITOR:
 	case D_OPTION:
@@ -303,7 +281,8 @@ static void gen_global_defn(Node *ep)
 		/* these have no direct correspondence to a C declaration */
 		break;
 	default:
-		assert_at_node(impossible, ep, "ep->tag==%s\n", node_name(ep));
+		report_at_node(ep, "ep->tag==%s\n", node_name(ep));
+		assert(impossible);
 	}
 }
 

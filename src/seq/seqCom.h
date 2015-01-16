@@ -54,12 +54,11 @@ typedef	struct state_set *const SS_ID;	/* state set id, opaque */
 typedef char string[MAX_STRING_SIZE];	/* representation of SNL string type */
 
 /*
- * It is strongly advised to treat EF_ID and CH_ID as opaque;
+ * It is strongly advised to treat evflag and CH_ID as opaque;
  * in future versions they may be replaced by pointer types.
  */
-typedef unsigned EF_ID;			/* identifier for an event */
+typedef unsigned evflag;		/* identifier for an event */
 typedef unsigned CH_ID;			/* identifier for a pv */
-
 typedef int seqBool;
 
 typedef struct seqProgram seqProgram;	/* struct defined in generated code */
@@ -71,10 +70,11 @@ typedef struct seqProgram seqProgram;	/* struct defined in generated code */
  */
 
 /* event flag operations */
-epicsShareFunc void seq_efSet(SS_ID, EF_ID);
-epicsShareFunc seqBool seq_efTest(SS_ID, EF_ID);
-epicsShareFunc seqBool seq_efClear(SS_ID, EF_ID);
-epicsShareFunc seqBool seq_efTestAndClear(SS_ID, EF_ID);
+epicsShareFunc void seq_efSet(SS_ID, evflag);
+epicsShareFunc seqBool seq_efTest(SS_ID, evflag);
+epicsShareFunc seqBool seq_efClear(SS_ID, evflag);
+epicsShareFunc seqBool seq_efTestAndClear(SS_ID, evflag);
+
 /* pv operations */
 epicsShareFunc pvStat seq_pvGet(SS_ID, CH_ID, enum compType);
 epicsShareFunc pvStat seq_pvGetTmo(SS_ID, CH_ID, enum compType, double tmo);
@@ -91,8 +91,9 @@ epicsShareFunc void seq_pvPutCancel(SS_ID, CH_ID);
 epicsShareFunc pvStat seq_pvAssignSubst(SS_ID, CH_ID, const char *);
 epicsShareFunc pvStat seq_pvAssign(SS_ID, CH_ID, const char *);
 epicsShareFunc pvStat seq_pvMonitor(SS_ID, CH_ID);
-epicsShareFunc void seq_pvSync(SS_ID, CH_ID, EF_ID);
+epicsShareFunc void seq_pvSync(SS_ID, CH_ID, evflag);
 epicsShareFunc pvStat seq_pvStopMonitor(SS_ID, CH_ID);
+
 /* pv info */
 epicsShareFunc char *seq_pvName(SS_ID, CH_ID);
 epicsShareFunc unsigned seq_pvCount(SS_ID, CH_ID);
@@ -109,7 +110,6 @@ epicsShareFunc seqBool seq_pvConnected(SS_ID, CH_ID);
 epicsShareFunc void seq_pvFlush(SS_ID);
 epicsShareFunc seqBool seq_delay(SS_ID, double);
 epicsShareFunc char *seq_macValueGet(SS_ID, const char *);
-epicsShareFunc void seq_exit(SS_ID);
 
 /* global info */
 epicsShareFunc unsigned seq_pvChannelCount(SS_ID);
@@ -132,7 +132,8 @@ typedef struct seqg_vars        USER_VAR;
 #define ssId			seqg_env
 #define pVar			seqg_var
 #define VAR_ID			CH_ID
-#define EV_ID			EF_ID
+#define EF_ID			evflag
+#define EV_ID			evflag
 #define seq_pvFreeQ		seq_pvFlushQ
 #define DEFAULT_QUEUE_SIZE	100	/* number of elements */
 

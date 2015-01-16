@@ -242,6 +242,7 @@ snl:
 	"enum"		{ TYPEWORD(ENUM,	"enum"); }
 	"evflag"	{ TYPEWORD(EVFLAG,	"evflag"); }
 	"exit"		{ KEYWORD(EXIT,		"exit"); }
+	"extern"	{ KEYWORD(EXTERN,	"extern"); }
 	"float"		{ TYPEWORD(FLOAT,	"float"); }
 	"for"		{ KEYWORD(FOR,		"for"); }
 	"foreign"	{ TYPEWORD(FOREIGN,	"foreign"); }
@@ -251,6 +252,7 @@ snl:
 	"monitor"	{ KEYWORD(MONITOR,	"monitor"); }
 	"option"	{ KEYWORD(OPTION,	"option"); }
 	"program"	{ KEYWORD(PROGRAM,	"program"); }
+	"pv"		{ TYPEWORD(PV,		"pv"); }
 	"return"	{ KEYWORD(RETURN,	"return"); }
 	"short"		{ TYPEWORD(SHORT,	"short"); }
 	"sizeof"	{ TYPEWORD(SIZEOF,	"sizeof"); }

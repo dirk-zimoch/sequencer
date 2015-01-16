@@ -8,7 +8,7 @@ This file is distributed subject to a Software License Agreement found
 in the file LICENSE that is included with this distribution.
 \*************************************************************************/
 /*************************************************************************\
-                Parser support routines
+			Creating expressions
 \*************************************************************************/
 #ifndef INCLparseh
 #define INCLparseh
@@ -37,5 +37,10 @@ uint strtoui(
 	uint limit,		/* result should be < limit */
 	uint *pnumber		/* location for result if successful */
 );
+
+Node *defn_list_from_scope(Node *scope);
+VarList **pvar_list_from_scope(Node *scope);
+
+#define var_list_from_scope(scope) (*pvar_list_from_scope(scope))
 
 #endif	/*INCLparseh*/

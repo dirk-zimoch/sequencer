@@ -14,7 +14,7 @@ in the file LICENSE that is included with this distribution.
 /*
  * Status.
  */
-typedef enum {
+typedef enum pvStat {
     /* generic OK and error statuses */
     pvStatOK           = 0,
     pvStatERROR        = -1,
@@ -47,7 +47,7 @@ typedef enum {
 /*
  * Severity.
  */
-typedef enum {
+typedef enum pvSevr {
     /* generic OK and error severities */
     pvSevrOK      = 0,
     pvSevrERROR   = -1,

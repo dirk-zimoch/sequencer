@@ -16,7 +16,6 @@ in the file LICENSE that is included with this distribution.
 #include "types.h"
 
 void generate_code(Program *p);
-void gen_defn_c_code(Node *scope, int level);
 void gen_var_decl(Var *vp);
 void indent(int level);
 
@@ -41,7 +40,9 @@ void indent(int level);
 #define NM_PTRN		"seqg_ptrn"
 #define NM_PNST		"seqg_pnst"
 
-/* prefix for generated inititialization variable names */
+/* prefix for generated variable names */
+#define NM_CHID		"seqg_chid_"
+#define NM_EFID		"seqg_efid_"
 #define NM_INITVAR	"seqg_initvar_"
 
 #define NM_DUMMY	"seqg_dummy"

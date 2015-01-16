@@ -4,156 +4,226 @@ Copyright (c) 2010-2015 Helmholtz-Zentrum Berlin f. Materialien
 This file is distributed subject to a Software License Agreement found
 in the file LICENSE that is included with this distribution.
 \*************************************************************************/
+#include <stdlib.h>
+
 #include "builtin.h"
+#include "var_types.h"
+#include "snl.h"
+#include "node.h"
+#include "gen_code.h"
+#include "analysis.h"
 
-static struct const_symbol const_symbols[] =
+static Node *mk_const(char *code, int token)
 {
-    {"TRUE",                CT_OTHER },
-    {"FALSE",               CT_OTHER },
-    {"SYNC",                CT_OTHER },
-    {"ASYNC",               CT_OTHER },
-    {"NOEVFLAG",            CT_EVFLAG},
-    {"pvStatOK",            CT_OTHER },
-    {"pvStatERROR",         CT_OTHER },
-    {"pvStatDISCONN",       CT_OTHER },
-    {"pvStatREAD",          CT_OTHER },
-    {"pvStatWRITE",         CT_OTHER },
-    {"pvStatHIHI",          CT_OTHER },
-    {"pvStatHIGH",          CT_OTHER },
-    {"pvStatLOLO",          CT_OTHER },
-    {"pvStatLOW",           CT_OTHER },
-    {"pvStatSTATE",         CT_OTHER },
-    {"pvStatCOS",           CT_OTHER },
-    {"pvStatCOMM",          CT_OTHER },
-    {"pvStatTIMEOUT",       CT_OTHER },
-    {"pvStatHW_LIMIT",      CT_OTHER },
-    {"pvStatCALC",          CT_OTHER },
-    {"pvStatSCAN",          CT_OTHER },
-    {"pvStatLINK",          CT_OTHER },
-    {"pvStatSOFT",          CT_OTHER },
-    {"pvStatBAD_SUB",       CT_OTHER },
-    {"pvStatUDF",           CT_OTHER },
-    {"pvStatDISABLE",       CT_OTHER },
-    {"pvStatSIMM",          CT_OTHER },
-    {"pvStatREAD_ACCESS",   CT_OTHER },
-    {"pvStatWRITE_ACCESS",  CT_OTHER },
-    {"pvSevrOK",            CT_OTHER },
-    {"pvSevrERROR",         CT_OTHER },
-    {"pvSevrNONE",          CT_OTHER },
-    {"pvSevrMINOR",         CT_OTHER },
-    {"pvSevrMAJOR",         CT_OTHER },
-    {"pvSevrINVALID",       CT_OTHER },
-    {"seqg_var",            CT_OTHER },
-    {"seqg_env",            CT_OTHER },
-    {0,                     CT_OTHER }
-};
+    Token k;
 
-/* single parameter descriptors */
-static const struct param efP       = { PT_EF, 0 };
-static const struct param pvP       = { PT_PV, 0 };
-static const struct param pvArrayP  = { PT_PV_ARRAY, 0 };
-static const struct param noDefP    = { PT_OTHER, 0 };
-static const struct param compTypeP = { PT_OTHER, "DEFAULT" };
-static const struct param tmoP      = { PT_OTHER, "DEFAULT_TIMEOUT" };
-static const struct param boolP     = { PT_OTHER, "FALSE" };
-static const struct param ptrP      = { PT_OTHER, "NULL" };
-static const struct param lengthP   = { PT_OTHER, 0 };
-static const struct param defLenP   = { PT_OTHER, "1" };
+    k.symbol = token;
+    k.str = code;
+    k.line = 1;
+    k.file = "<builtin>";
+    return node(E_CONST, k);
+}
 
-/* multiple parameter descriptors */
-static const struct param *noParams[]                    = {0};
-static const struct param *otherParams[]                 = {&noDefP,0};
-static const struct param *efParams[]                    = {&efP,0};
-static const struct param *assignParams[]                = {&pvP,&noDefP,0};
-static const struct param *pvParams[]                    = {&pvP,0};
-static const struct param *pvArrayParams[]               = {&pvArrayP,&lengthP,0};
-static const struct param *pvSyncParams[]                = {&pvP,&efP,0};
-static const struct param *pvArraySyncParams[]           = {&pvArrayP,&lengthP,&efP,0};
-static const struct param *pvGetPutParams[]              = {&pvP,&compTypeP,&tmoP,0};
-static const struct param *pvArrayGetPutCompleteParams[] = {&pvArrayP,&lengthP,&boolP,&ptrP,0};
-/* for backward compatibility */
-static const struct param *pvPutCompleteParams[]         = {&pvP,&defLenP,&boolP,&ptrP,0};
-
-static struct func_symbol func_symbols[] =
+static Var *mk_var(Node *scope, char *name, Type *type)
 {
-    /* name              c_name     action_only cond_only params                    */
-    {"delay",               0,          FALSE,  TRUE,   otherParams                 },
-    {"efClear",             0,          TRUE,   FALSE,  efParams                    },
-    {"efSet",               0,          TRUE,   FALSE,  efParams                    },
-    {"efTest",              0,          FALSE,  FALSE,  efParams                    },
-    {"efTestAndClear",      0,          FALSE,  FALSE,  efParams                    },
-    {"macValueGet",         0,          FALSE,  FALSE,  otherParams                 },
-    {"optGet",              0,          FALSE,  FALSE,  otherParams                 },
-    {"pvAssign",            0,          FALSE,  FALSE,  assignParams                },
-    {"pvAssignCount",       0,          FALSE,  FALSE,  noParams                    },
-    {"pvAssignSubst",       0,          FALSE,  FALSE,  assignParams                },
-    {"pvAssigned",          0,          FALSE,  FALSE,  pvParams                    },
-    {"pvChannelCount",      0,          FALSE,  FALSE,  noParams                    },
-    {"pvConnectCount",      0,          FALSE,  FALSE,  noParams                    },
-    {"pvConnected",         0,          FALSE,  FALSE,  pvParams                    },
-    {"pvArrayConnected",    0,          FALSE,  FALSE,  pvArrayParams               },
-    {"pvCount",             0,          FALSE,  FALSE,  pvParams                    },
-    {"pvFlush",             0,          FALSE,  FALSE,  noParams                    },
-    {"pvFlushQ",            0,          FALSE,  FALSE,  pvParams                    },
-    {"pvFreeQ",             0,          FALSE,  FALSE,  pvParams                    },
-    {"pvGet",               "pvGetTmo", FALSE,  FALSE,  pvGetPutParams              },
-    {"pvGetCancel",         0,          FALSE,  FALSE,  pvParams                    },
-    {"pvArrayGetCancel",    0,          FALSE,  FALSE,  pvArrayParams               },
-    {"pvGetComplete",       0,          FALSE,  FALSE,  pvParams                    },
-    {"pvArrayGetComplete",  0,          FALSE,  FALSE,  pvArrayGetPutCompleteParams },
-    {"pvGetQ",              0,          FALSE,  FALSE,  pvParams                    },
-    {"pvIndex",             0,          FALSE,  FALSE,  pvParams                    },
-    {"pvMessage",           0,          FALSE,  FALSE,  pvParams                    },
-    {"pvMonitor",           0,          FALSE,  FALSE,  pvParams                    },
-    {"pvArrayMonitor",      0,          FALSE,  FALSE,  pvArrayParams               },
-    {"pvName",              0,          FALSE,  FALSE,  pvParams                    },
-    {"pvPut",               "pvPutTmo", FALSE,  FALSE,  pvGetPutParams              },
-    {"pvPutCancel",         0,          FALSE,  FALSE,  pvParams                    },
-    {"pvArrayPutCancel",    0,          FALSE,  FALSE,  pvArrayParams               },
-    {"pvPutComplete",       0,          FALSE,  FALSE,  pvPutCompleteParams         },
-    {"pvArrayPutComplete",  0,          FALSE,  FALSE,  pvArrayGetPutCompleteParams },
-    {"pvSeverity",          0,          FALSE,  FALSE,  pvParams                    },
-    {"pvStatus",            0,          FALSE,  FALSE,  pvParams                    },
-    {"pvStopMonitor",       0,          FALSE,  FALSE,  pvParams                    },
-    {"pvArrayStopMonitor",  0,          FALSE,  FALSE,  pvArrayParams               },
-    {"pvSync",              0,          FALSE,  FALSE,  pvSyncParams                },
-    {"pvArraySync",         0,          FALSE,  FALSE,  pvArraySyncParams           },
-    {"pvTimeStamp",         0,          FALSE,  FALSE,  pvParams                    },
-    {0,                     0,          FALSE,  FALSE,  0                           }
-};
+    Var *vp = new(Var);
+    vp->name = name;
+    vp->type = type;
+    if (type->tag == T_EVFLAG)
+        vp->chan.evflag = new(EvFlag);
+    add_var_to_scope(vp, scope);
+    return vp;
+}
 
-/* Insert builtin constants into symbol table */
-void register_builtin_consts(SymTable sym_table)
+static Var *mk_func(Node *scope, char *name, Type *return_type, Node *param_decls)
 {
-    struct const_symbol *sym;
+    return mk_var(scope, name, mk_function_type(return_type, param_decls));
+}
 
-    for (sym = const_symbols; sym->name; sym++) {
-        /* use address of const_symbols array as the symbol type */
-        sym_table_insert(sym_table, sym->name, const_symbols, sym);
+static Node *mk_def_param(char *name, Type *t, Node *def)
+{
+    Token k;
+    Node *d;
+
+    k.symbol = TOK_NAME;
+    k.str = name;
+    k.line = 1;
+    k.file = "<builtin>";
+    d = new_decl(k, t);
+    if (def) {
+        d->decl_init = def;
     }
+    return d;
 }
 
-/* Insert builtin functions into symbol table */
-void register_builtin_funcs(SymTable sym_table)
-{
-    struct func_symbol *sym;
+#define mk_param(n,t)           mk_def_param(n,t,0)
 
-    for (sym = func_symbols; sym->name; sym++) {
-        /* use address of func_symbols array as the symbol type */
-        sym_table_insert(sym_table, sym->name, func_symbols, sym);
-    }
+/* just some unique object */
+static void *builtin_const = &builtin_const;
+
+/* Insert builtin functions and constants into symbol table */
+void register_builtins(SymTable st, Node *scope)
+{
+    VarList *vl = var_list_from_scope(scope);
+
+    Node *defaultCompType = mk_const("DEFAULT",         TOK_INTCON);
+    Node *defaultTimeout  = mk_const("DEFAULT_TIMEOUT", TOK_FPCON);
+    Node *defaultNumElems = mk_const("1",               TOK_INTCON);
+    Node *defaultAll      = mk_const("FALSE",           TOK_INTCON);
+    Node *defaultNull     = mk_const("NULL",            TOK_INTCON);
+
+    Type *unsignedT       = mk_prim_type(P_UINT);
+    Type *charT           = mk_prim_type(P_CHAR);
+    Type *doubleT         = mk_prim_type(P_DOUBLE);
+    Type *voidT           = mk_void_type();
+    Type *efT             = mk_ef_type();
+    Type *pvT             = mk_pv_type(voidT);
+    Type *charPtrT        = mk_pointer_type(charT);
+    Type *charConstPtrT   = mk_pointer_type(mk_const_type(charT));
+    Type *pvStatT         = mk_foreign_type(F_ENUM, "pvStat");
+    Type *pvSevrT         = mk_foreign_type(F_ENUM, "pvSevr");
+    Type *seqBoolT        = mk_foreign_type(F_TYPENAME, "seqBool");
+    Type *seqBoolPtrT     = mk_pointer_type(seqBoolT);
+    Type *timestampT      = mk_foreign_type(F_STRUCT, "epicsTimeStamp");
+    Type *compT           = mk_foreign_type(F_ENUM, "compType");
+    Type *ssT             = mk_foreign_type(F_TYPENAME, "SS_ID");
+
+    #define cins(n)                 sym_table_insert(st, n, builtin_const, mk_const(n, TOK_INTCON))
+    #define fins(n,r,ps)            sym_table_insert(st, n, vl, mk_func(scope, "seq_" n, r,\
+                                        link_node(mk_param(NM_ENV, ssT),ps)))
+    #define finsa(n,a,r,ps)         sym_table_insert(st, n, vl, mk_func(scope, "seq_" a, r,\
+                                        link_node(mk_param(NM_ENV, ssT),ps)))
+    #define fins0(n,r)              fins(n,r,0)
+    #define fins1(n,r,p1)           fins(n,r,p1)
+    #define fins2(n,r,p1,p2)        fins(n,r,link_node(p1,p2))
+    #define fins3(n,r,p1,p2,p3)     fins(n,r,link_node(p1,link_node(p2,p3)))
+    #define fins3a(n,a,r,p1,p2,p3)  finsa(n,a,r,link_node(p1,link_node(p2,p3)))
+    #define fins4(n,r,p1,p2,p3,p4)  fins(n,r,link_node(p1,link_node(p2,link_node(p3,p4))))
+
+    /*** constants ***/
+
+    /* seqBool */
+    cins("TRUE");
+    cins("FALSE");
+
+    /* enum compType */
+    cins("DEFAULT");
+    cins("SYNC");
+    cins("ASYNC");
+
+    /* for pvSync */
+    cins("NOEVFLAG");
+
+    /* enum pvSevr */
+    cins("pvStatOK");
+    cins("pvStatERROR");
+    cins("pvStatDISCONN");
+    cins("pvStatREAD");
+    cins("pvStatWRITE");
+    cins("pvStatHIHI");
+    cins("pvStatHIGH");
+    cins("pvStatLOLO");
+    cins("pvStatLOW");
+    cins("pvStatSTATE");
+    cins("pvStatCOS");
+    cins("pvStatCOMM");
+    cins("pvStatTIMEOUT");
+    cins("pvStatHW_LIMIT");
+    cins("pvStatCALC");
+    cins("pvStatSCAN");
+    cins("pvStatLINK");
+    cins("pvStatSOFT");
+    cins("pvStatBAD_SUB");
+    cins("pvStatUDF");
+    cins("pvStatDISABLE");
+    cins("pvStatSIMM");
+    cins("pvStatREAD_ACCESS");
+    cins("pvStatWRITE_ACCESS");
+
+    /* enum pvSevr */
+    cins("pvSevrOK");
+    cins("pvSevrERROR");
+    cins("pvSevrNONE");
+    cins("pvSevrMINOR");
+    cins("pvSevrMAJOR");
+    cins("pvSevrINVALID");
+
+    cins("seqg_var");
+    cins("seqg_env");
+
+    /*** functions ***/
+
+    /* event flag operations */
+    fins1("efSet",              seqBoolT,       mk_param("event_flag", efT));
+    fins1("efClear",            seqBoolT,       mk_param("event_flag", efT));
+    fins1("efTest",             seqBoolT,       mk_param("event_flag", efT));
+    fins1("efTestAndClear",     seqBoolT,       mk_param("event_flag", efT));
+
+    /* pv operations */
+    fins3a("pvGet", "pvGetTmo", pvStatT,        mk_param("channel", pvT),
+                                                mk_def_param("comp_type", compT, defaultCompType),
+                                                mk_def_param("timeout", doubleT, defaultTimeout));
+    fins1("pvGetQ",             seqBoolT,       mk_param("channel", pvT));
+    fins1("pvFlushQ",           voidT,          mk_param("channel", pvT));
+    fins3a("pvPut", "pvPutTmo", pvStatT,        mk_param("channel", pvT),
+                                                mk_def_param("comp_type", compT, defaultCompType),
+                                                mk_def_param("timeout", doubleT, defaultTimeout));
+    fins1("pvGetComplete",      seqBoolT,       mk_param("channel", pvT));
+    fins4("pvArrayGetComplete", seqBoolT,       mk_param("channel", pvT),
+                                                mk_def_param("num_elems", unsignedT, defaultNumElems),
+                                                mk_def_param("any", seqBoolT, defaultAll),
+                                                mk_def_param("done", seqBoolPtrT, defaultNull));
+    fins4("pvPutComplete",      seqBoolT,       mk_param("channel", pvT),
+                                                mk_def_param("num_elems", unsignedT, defaultNumElems),
+                                                mk_def_param("any", seqBoolT, defaultAll),
+                                                mk_def_param("done", seqBoolPtrT, defaultNull));
+    fins4("pvArrayPutComplete", seqBoolT,       mk_param("channel", pvT),
+                                                mk_def_param("num_elems", unsignedT, defaultNumElems),
+                                                mk_def_param("any", seqBoolT, defaultAll),
+                                                mk_def_param("done", seqBoolPtrT, defaultNull));
+    fins1("pvGetCancel",        pvStatT,        mk_param("channel", pvT));
+    fins1("pvPutCancel",        pvStatT,        mk_param("channel", pvT));
+    fins2("pvAssign",           pvStatT,        mk_param("channel", pvT),
+                                                mk_param("pv_name", charConstPtrT));
+    fins2("pvAssignSubst",      pvStatT,        mk_param("channel", pvT),
+                                                mk_param("pv_name", charConstPtrT));
+    fins1("pvMonitor",          pvStatT,        mk_param("channel", pvT));
+    fins2("pvArrayMonitor",     pvStatT,        mk_param("channel", pvT),
+                                                mk_def_param("num_elems", unsignedT, defaultNumElems));
+    fins1("pvStopMonitor",      pvStatT,        mk_param("channel", pvT));
+    fins2("pvArrayStopMonitor", pvStatT,        mk_param("channel", pvT),
+                                                mk_def_param("num_elems", unsignedT, defaultNumElems));
+
+    /* pv info */
+    fins1("pvName",             charPtrT,       mk_param("channel", pvT));
+    fins1("pvCount",            unsignedT,      mk_param("channel", pvT));
+    fins1("pvStatus",           pvStatT,        mk_param("channel", pvT));
+    fins1("pvSeverity",         pvSevrT,        mk_param("channel", pvT));
+    fins1("pvTimeStamp",        timestampT,     mk_param("channel", pvT));
+    fins1("pvMessage",          charConstPtrT,  mk_param("channel", pvT));
+    fins1("pvAssigned",         pvStatT,        mk_param("channel", pvT));
+    fins1("pvConnected",        seqBoolT,       mk_param("channel", pvT));
+
+    fins1("pvIndex",            pvStatT,        mk_param("channel", pvT));
+
+    /* global operations */
+    fins0("pvFlush",            pvStatT);
+    fins2("pvSync",             pvStatT,        mk_param("channel", pvT),
+                                                mk_param("event_flag", efT));
+    fins3("pvArraySync",        pvStatT,        mk_param("channel", pvT),
+                                                mk_param("num_elems", unsignedT),
+                                                mk_param("event_flag", efT));
+    fins1("delay",              seqBoolT,       mk_param("delay_in_seconds", doubleT));
+    fins1("macValueGet",        charPtrT,       mk_param("param_name", charConstPtrT));
+
+    /* global info */
+    fins0("pvChannelCount",     unsignedT);
+    fins0("pvConnectCount",     unsignedT);
+    fins0("pvAssignCount",      unsignedT);
+    fins1("optGet",             seqBoolT,       mk_param("opt_name", charConstPtrT));
 }
 
-/* Look up a builtin function from the symbol table */
-struct func_symbol *lookup_builtin_func(SymTable sym_table, const char *func_name)
+Node *lookup_builtin_const(SymTable sym_table, const char *name)
 {
-    /* use address of func_symbols array as the symbol type */
-    return (struct func_symbol *)sym_table_lookup(sym_table, func_name, func_symbols);
-}
-
-/* Look up a builtin constant from the symbol table */
-struct const_symbol *lookup_builtin_const(SymTable sym_table, const char *const_name)
-{
-    /* use address of const_symbols array as the symbol type */
-    return (struct const_symbol *)sym_table_lookup(sym_table, const_name, const_symbols);
+    return (Node *)sym_table_lookup(sym_table, name, builtin_const);
 }

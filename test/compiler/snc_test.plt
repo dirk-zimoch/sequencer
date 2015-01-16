@@ -9,7 +9,6 @@ my $tests = {
   delay_in_action         => { warnings => 0, errors => 1  },
   efArray                 => { warnings => 0, errors => 1  },
   efGlobal                => { warnings => 0, errors => 3  },
-  efNoInit                => { warnings => 0, errors => 1  },
   efPointer               => { warnings => 0, errors => 1  },
   exOpt_UnrecOpt          => { warnings => 1, errors => 0  },
   foreignGlobal           => { warnings => 1, errors => 3  },
@@ -27,7 +26,7 @@ my $tests = {
   syncq_no_size           => { warnings => 1, errors => 0  },
   syncq_not_assigned      => { warnings => 0, errors => 1  },
   syncq_size_out_of_range => { warnings => 0, errors => 1  },
-  type_not_allowed        => { warnings => 2, errors => 9  },
+  type_not_allowed        => { warnings => 3, errors => 13 },
 };
 
 my @progs = sort(keys(%$tests));
@@ -44,7 +43,7 @@ foreach my $prog (@progs) {
     plan tests => 3;
     my $output = `make -s -B $prog.c 2>&1`;
     my $exitcode = $? >> 8;
-    $output =~ s/^make.*$//m;
+    $output =~ s/^make.*\n//mg; # filter out messages by make itself
     my $failed;
     SKIP: {
       skip "errors are expected", 1 if $tests->{$prog}->{errors} > 0;

@@ -4,37 +4,47 @@ Copyright (c) 2013-2015 Helmholtz-Zentrum Berlin f. Materialien
 This file is distributed subject to a Software License Agreement found
 in the file LICENSE that is included with this distribution.
 \*************************************************************************/
-/* Extremely rudimentary type checker. We do just enough to find out
-   whether a given expression is a call to a C or an SNL function. */
+/* Extremely rudimentary type checker. The function type_of takes an
+   expression and returns an approximation of its type. Used for code
+   generation when we want to find out
+    (a) whether a given expression has function type (so we can add
+        implicit parameters)
+    (b) for which parts of an expression we have to substitute the
+        channel id instead of the value of variable
+   Error reporting is done only in a few cases
+*/
+
 #include <assert.h>
 #include <string.h>
 #include "main.h"
 #include "snl.h"
 #include "types.h"
 #include "var_types.h"
+#include "type_check.h"
 
 static const int impossible = FALSE;
 
-/* some type constants */
-static Type num_type_s = { T_PRIM, 0, {P_INT} };
-static Type str_type_s = { T_PRIM, 0, {P_STRING} };
-static Type no_type_s = { T_NONE, 0, {0} };
-static Type *num_type = &num_type_s;
-static Type *str_type = &str_type_s;
-static Type *no_type = &no_type_s;
+/* some type "constants" */
+#define num_type    mk_prim_type(P_INT)
+#define char_type   mk_prim_type(P_CHAR)
+#define no_type     mk_no_type()
 
-static Type *type_error_at(Node *e)
-{
-    error_at_node(e, "type error");
-    return no_type;
-}
 
-static Type *new_pointer_type(Type *t)
+void dump_expr(Node *e, int level)
 {
-    Type *r = new(Type);
-    r->tag = T_POINTER;
-    r->val.pointer.value_type = t;
-    return r;
+    int i, l;
+    for (l = 0; l < level; l++) report("  ");
+    if (e) {
+        Node *ce;
+        report("%s '%s'\n", node_name(e), e->token.str);
+        for (i = 0; i < node_info[e->tag].num_children; i++) {
+            foreach (ce, e->children[i]) {
+                dump_expr(ce, level+1);
+            }
+        }
+    } else {
+        report("***NULL***\n");
+    }
 }
 
 static Type *member_type(Node *members, const char *name)
@@ -55,63 +65,84 @@ Type *type_of(Node *e)
 {
     Type *t, *l, *r;
 
+#ifdef DEBUG
+    report("type_of()\n");
+    dump_expr(e, 1);
+#endif
+
     switch (e->tag) {
+    case E_ASSOP:                       /* assignment operator [left,right] */
+        l = type_of(e->assop_left);
+        r = type_of(e->assop_right);
+        switch (e->token.symbol) {
+        case TOK_ADDEQ:
+        case TOK_SUBEQ:
+            if (type_is_pointer(l) && !type_is_pointer(r)) {
+                return l;
+            }
+            if (!type_is_pointer(l) && type_is_pointer(r)) {
+                return r;
+            }
+            if (type_is_pointer(l) && type_is_pointer(r)) {
+                return error_at_node(e, "invalid operands of %s", e->token.str), no_type;
+            }
+            /* fall through */
+        default:
+            if (l->tag == T_FOREIGN || r->tag == T_FOREIGN)
+                return no_type;
+            if (l->tag == T_NONE || r->tag == T_NONE)
+                return no_type;
+            return strip_pv_type(l);
+            break;
+        }
+        break;
     case E_BINOP:                       /* binary operator [left,right] */
         l = type_of(e->binop_left);
         r = type_of(e->binop_right);
         switch (e->token.symbol) {
         case TOK_SUB:
         case TOK_ADD:
-            if (l->tag == T_POINTER) {
+            if (type_is_pointer(l) && !type_is_pointer(r)) {
                 return l;
-            } else {
-                /* TODO: what if it's a foreign pointer? */
-                return num_type;
             }
+            if (!type_is_pointer(l) && type_is_pointer(r)) {
+                return r;
+            }
+            if (type_is_pointer(l) && type_is_pointer(r)) {
+                return error_at_node(e, "invalid operands of binary %s", e->token.str), no_type;
+            }
+            /* fall through */
         case TOK_ASTERISK:
         case TOK_SLASH:
-            return num_type;
         case TOK_GT:
         case TOK_GE:
         case TOK_EQ:
         case TOK_NE:
         case TOK_LE:
         case TOK_LT:
-            return num_type;
         case TOK_OROR:
         case TOK_ANDAND:
-            return num_type;
         case TOK_LSHIFT:
         case TOK_RSHIFT:
-            return num_type;
         case TOK_VBAR:
         case TOK_CARET:
         case TOK_AMPERSAND:
         case TOK_MOD:
+            if (l->tag == T_FOREIGN || r->tag == T_FOREIGN)
+                return no_type;
+            if (l->tag == T_NONE || r->tag == T_NONE)
+                return no_type;
             return num_type;
-        case TOK_EQUAL:
-        case TOK_ADDEQ:
-        case TOK_SUBEQ:
-        case TOK_ANDEQ:
-        case TOK_OREQ:
-        case TOK_DIVEQ:
-        case TOK_MULEQ:
-        case TOK_MODEQ:
-        case TOK_LSHEQ:
-        case TOK_RSHEQ:
-        case TOK_XOREQ:
-            return r;
         case TOK_COMMA:
-            return r;
+            return strip_pv_type(r);
         }
-    case E_BUILTIN:                     /* builtin function [] */
-        /* TODO: create built-in functions with their real type */
-        return num_type;
     case E_CAST:                        /* type cast [type,operand] */
+        assert(e->cast_type);
+        assert(e->cast_type->extra.e_decl);
         return e->cast_type->extra.e_decl->type;
     case E_CONST:                       /* numeric (inkl. character) constant [] */
         return num_type;
-    case E_FUNC:                        /* function call [node,args] */
+    case E_FUNC:                        /* function call [expr,args] */
         t = type_of(e->func_expr);
         if (t->tag == T_FUNCTION) {
             return t->val.function.return_type;
@@ -119,13 +150,11 @@ Type *type_of(Node *e)
             return no_type;
         }
     case E_INIT:                        /* array or struct initializer [elems] */
-        assert(impossible);
         return no_type;
     case E_MEMBER:                      /* struct or union member [] */
-        /* because we handle this one in E_SELECT */
-        assert(impossible);
+        assert(impossible);             /* handled in case E_SELECT */
         return no_type;
-    case E_PAREN:                       /* parenthesis around an expression [node] */
+    case E_PAREN:                       /* parenthesis around an expression [expr] */
         return type_of(e->paren_expr);
     case E_POST:                        /* unary postfix operator [operand] */
         return type_of(e->post_operand);
@@ -134,25 +163,25 @@ Type *type_of(Node *e)
         switch (e->token.symbol) {
         case TOK_ADD:
         case TOK_SUB:
-            return t;
+            return strip_pv_type(t);
         case TOK_ASTERISK:
             if (t->tag == T_POINTER) {
                 return t->val.pointer.value_type;
             } else if (t->tag == T_ARRAY) {
                 return t->val.array.elem_type;
             } else if (t->tag == T_PRIM && t->val.prim == P_STRING) {
-                return num_type;
+                return char_type;
             } else {
                 return no_type;
             }
         case TOK_AMPERSAND:
-            return new_pointer_type(t);
+            return mk_pointer_type(t);
         case TOK_NOT:
         case TOK_TILDE:
             return num_type;
         case TOK_INCR:
         case TOK_DECR:
-            return t;
+            return strip_pv_type(t);
         case TOK_SIZEOF:
             return num_type;
         }
@@ -160,17 +189,12 @@ Type *type_of(Node *e)
         t = type_of(e->select_left);
         switch (e->token.symbol) {
         case TOK_POINTER:
-#ifdef DEBUG
-            report("type_of(): op='->'\n");
-#endif
             if (t->tag == T_POINTER)
                 t = t->val.pointer.value_type;
             else
                 return no_type;
+            /* fall through */
         case TOK_PERIOD:
-#ifdef DEBUG
-            report("type_of(): op='.', t->tag=%s\n", type_tag_names[t->tag]);
-#endif
             if (t->tag == T_STRUCT)
                 return member_type(t->val.structure.member_decls, e->select_right->token.str);
             else
@@ -179,38 +203,35 @@ Type *type_of(Node *e)
             assert(impossible);
             return no_type;
         }
+    case E_SIZEOF:                      /* sizeof [decl] */
+        return num_type;
     case E_STRING:                      /* string constant [] */
-        return str_type;               /* just a first approximation, of course */
-    case E_SUBSCR:                      /* subscripted node [operand,index] */
-        t = type_of(e->subscr_operand);
+        return mk_pointer_type(mk_const_type(char_type));
+    case E_SUBSCR:                      /* subscripted expr [operand,index] */
+        t = strip_pv_type(type_of(e->subscr_operand));
         switch (t->tag) {
         case T_ARRAY:
             return t->val.array.elem_type;
         case T_POINTER:
             return t->val.pointer.value_type;
+        case T_PRIM:
+            if (t->val.prim == P_STRING)
+                return char_type;
+            else
+                return no_type;
         default:
-            return type_error_at(e->subscr_operand);
+            return error_at_node(e->subscr_operand, "subscript operand has wrong type\n"), no_type;
         }
     case E_TERNOP:                      /* ternary operator [cond,then,else] */
         return type_of(e->ternop_then);
     case E_VAR:                         /* variable [] */
-        return e->extra.e_decl->type;
+        if (!e->extra.e_var)
+            return mk_no_type();
+        else
+            return e->extra.e_var->type;
     default:
+        error_at_node(e, "unexpected expression type %s\n", node_name(e));
         assert(impossible);
         return no_type;
     }
-}
-
-int type_is_function(Node *e)
-{
-    Type *t = type_of(e);
-
-    assert(t);
-
-#ifdef DEBUG
-    report("type_is_function(): t->tag==%s\n", type_tag_names[t->tag]);
-#endif
-
-    return t->tag == T_FUNCTION ||
-        (t->tag == T_POINTER && t->val.pointer.value_type->tag == T_FUNCTION);
 }

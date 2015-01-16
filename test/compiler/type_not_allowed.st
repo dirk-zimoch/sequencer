@@ -24,4 +24,10 @@ int f__v(void v);       /* error: void parameter should not have a name */
 
 int a_i_zero[0];        /* error: invalid array size (must be >= 1) */
 
+void pv pv_v;           /* error: void pv can only be declared as function parameter */
+evflag pv pv_ef;        /* error: invalid pv type */
+int const pv pv_ci;     /* error: pv of constant */
+int pv const cpv_i;     /* warning: constant pv */
+int pv pv pvpv_i;       /* error: repeated pv */
+
 #include "../simple.st"

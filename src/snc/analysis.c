@@ -33,7 +33,7 @@ void *structdefs = &structdefs;
 static void analyse_definitions(Program *p);
 static void analyse_option(Options *options, Node *defn);
 static void analyse_state_option(StateOptions *options, Node *defn);
-static void analyse_declaration(SymTable st, Node *scope, Node *defn);
+static void analyse_declaration(SymTable st, ChanList *chan_list, Node *scope, Node *defn);
 static void analyse_assign(SymTable st, ChanList *chan_list, Node *scope, Node *defn);
 static void analyse_monitor(SymTable st, Node *scope, Node *defn);
 static void analyse_sync(SymTable st, Node *scope, Node *defn);
@@ -47,7 +47,6 @@ static void connect_variables(SymTable st, Node *scope);
 static void connect_state_change_stmts(SymTable st, Node *scope);
 static uint connect_states(SymTable st, Node *ss_list);
 static void check_states_reachable_from_first(Node *ss);
-static void add_var(Var *vp, Node *scope);
 static Var *find_var(SymTable st, char *name, Node *scope);
 static uint assign_ef_bits(Node *scope);
 
@@ -72,14 +71,17 @@ Program *analyse_program(Node *prog, Options options)
 
 	p->sym_table = sym_table_create();
 
-	register_builtin_consts(p->sym_table);
-	register_builtin_funcs(p->sym_table);
-
 	p->chan_list = new(ChanList);
 	p->syncq_list = new(SyncQList);
 
 #ifdef DEBUG
 	report("created symbol table, channel list, and syncq list\n");
+#endif
+
+	register_builtins(p->sym_table, p->prog);
+
+#ifdef DEBUG
+	report("registered builtin symbols\n");
 #endif
 
 	analyse_definitions(p);
@@ -148,11 +150,11 @@ static void analyse_defns(Node *defn_list, Node *scope, Program *p)
 			}
 			break;
 		case D_DECL:
-			analyse_declaration(p->sym_table, scope, defn);
+			analyse_declaration(p->sym_table, p->chan_list, scope, defn);
 			break;
 		case D_FUNCDEF:
 			analyse_funcdef(defn);
-			analyse_declaration(p->sym_table, scope, defn->funcdef_decl);
+			analyse_declaration(p->sym_table, p->chan_list, scope, defn->funcdef_decl);
 			break;
 		case D_ENUMDEF:
 			/* TODO: analyse enum definition */
@@ -184,7 +186,7 @@ static int analyse_scope(Node *scope, Node *parent_scope, void *parg)
 {
 	Program	*p = (Program *)parg;
 	Node *defn_list;
-	VarList **pvar_list;
+	VarList *var_list;
 
 	assert(scope);	/* precondition */
 
@@ -197,17 +199,12 @@ static int analyse_scope(Node *scope, Node *parent_scope, void *parg)
 	assert(!parent_scope || is_scope(parent_scope));	/* precondition */
 
 	defn_list = defn_list_from_scope(scope);
-	pvar_list = pvar_list_from_scope(scope);
+	var_list = var_list_from_scope(scope);
 
-	/* NOTE: We always need to allocate a var_list, even if there are no
-	   definitions on this level, so later on (see connect_variables below)
-	   we can traverse in the other direction to find the nearest enclosing
-	   scope. */
-	if (!*pvar_list)
-	{
-		*pvar_list = new(VarList);
-		(*pvar_list)->parent_scope = parent_scope;
-	}
+	assert(var_list);					/* invariant, see expr() */
+	assert(!var_list->parent_scope);			/* invariant, see expr() */
+
+	var_list->parent_scope = parent_scope;
 
 	analyse_defns(defn_list, scope, p);
 	if (scope->tag == D_PROG)
@@ -216,52 +213,6 @@ static int analyse_scope(Node *scope, Node *parent_scope, void *parg)
 	}
 
 	return TRUE; /* always descend into children */
-}
-
-VarList **pvar_list_from_scope(Node *scope)
-{
-	assert(scope);			/* precondition */
-	assert(is_scope(scope));	/* precondition */
-
-	switch(scope->tag)
-	{
-	case D_PROG:
-		return &scope->extra.e_prog;
-	case D_SS:
-		assert(scope->extra.e_ss);	/* invariant */
-		return &scope->extra.e_ss->var_list;
-	case D_STATE:
-		assert(scope->extra.e_state);	/* invariant */
-		return &scope->extra.e_state->var_list;
-	case S_CMPND:
-		return &scope->extra.e_cmpnd;
-	case D_FUNCDEF:
-		return &scope->extra.e_funcdef;
-	default:
-		assert(impossible); return NULL;
-	}
-}
-
-Node *defn_list_from_scope(Node *scope)
-{
-	assert(scope);			/* precondition */
-	assert(is_scope(scope));	/* precondition */
-
-	switch(scope->tag)
-	{
-	case D_PROG:
-		return scope->prog_defns;
-	case D_SS:
-		return scope->ss_defns;
-	case D_STATE:
-		return scope->state_defns;
-	case S_CMPND:
-		return scope->cmpnd_defns;
-	case D_FUNCDEF:
-		return scope->funcdef_params;
-	default:
-		assert(impossible); return NULL;
-	}
 }
 
 static void analyse_definitions(Program *p)
@@ -409,10 +360,31 @@ static void fixup_struct_refs(SymTable st, Type *t)
 			}
 		}
 		break;
+	case T_PV:
+		fixup_struct_refs(st, t->val.pv.value_type);
+		break;
 	}
 }
 
-static void analyse_declaration(SymTable st, Node *scope, Node *defn)
+static void analyse_pv_decl(ChanList *chan_list, Node *decl, Var *vp)
+{
+	if (vp->type->tag == T_PV)
+	{
+		assign_single(chan_list, decl, vp, 0);
+	}
+	else if (vp->type->tag == T_ARRAY && vp->type->val.array.elem_type->tag == T_PV)
+		assign_multi(chan_list, decl, vp, 0);
+#if 0
+	assert(vp->decl);
+	if (vp->decl->init)
+	{
+		error_at_node(decl, "pv type variables cannot be initialized\n");
+		vp->decl->init = expr(
+	}
+#endif
+}
+
+static void analyse_declaration(SymTable st, ChanList *chan_list, Node *scope, Node *defn)
 {
 	Var *vp;
         VarList *var_list;
@@ -434,24 +406,25 @@ static void analyse_declaration(SymTable st, Node *scope, Node *defn)
 			"foreign declarations are deprecated\n");
 		seen_foreign = TRUE;
 	}
-	if (scope->tag != D_PROG)
-	{
-		const char *things = 0;
-
-		switch (vp->type->tag)
-		{
-		case T_NONE: things = "foreign objects"; break;
-		case T_EVFLAG: things = "event flags"; break;
-		case T_FUNCTION: things = "functions"; break;
-		default: break;
-		}
-		if (things)
-			error_at_node(defn,
-				"%s can only be declared at the top-level\n", things);
-	}
+	if (vp->type->tag == T_NONE && scope->tag != D_PROG)
+		error_at_node(defn,
+			"foreign objects can only be declared at the top-level\n");
+	if (vp->type->tag == T_FUNCTION && scope->tag != D_PROG)
+		error_at_node(defn,
+			"functions can only be declared at the top-level\n");
 	if (vp->type->tag == T_EVFLAG)
 	{
+		if (scope->tag != D_PROG && scope->tag != D_FUNCDEF)
+			error_at_node(defn,
+				"event flags can only be declared at the top-level"
+				"or as function parameter\n");
 		vp->chan.evflag = new(EvFlag);
+	}
+	if (vp->type->tag == T_PV && vp->type->val.pv.value_type->tag == T_VOID)
+	{
+		if (scope->tag != D_FUNCDEF)
+			error_at_node(defn,
+				"void pv can only be declared as function parameter\n");
 	}
 #ifdef DEBUG
 	report("name=%s, before fixup:\n", vp->name);
@@ -487,7 +460,20 @@ static void analyse_declaration(SymTable st, Node *scope, Node *defn)
 	}
 	else
 	{
-		add_var(vp, scope);
+		add_var_to_scope(vp, scope);
+	}
+	if (scope->tag == D_FUNCDEF)
+	{
+#if 0
+		if (vp->type->is_pv && vp->type->tag != T_POINTER)
+			error_at_node(defn,
+				"type of '%s' not allowed for function parameter\n",
+				vp->name);
+#endif
+	}
+	else
+	{
+		analyse_pv_decl(chan_list, defn, vp);
 	}
 }
 
@@ -542,6 +528,10 @@ static void analyse_assign(SymTable st, ChanList *chan_list, Node *scope, Node *
 	{
 		assign_single(chan_list, defn, vp, defn->assign_pvs);
 	}
+#ifdef DEBUG
+	report("analyse_assign: final type of '%s' is\n", vp->name);
+	dump_type(vp->type, 1);
+#endif
 }
 
 /* Assign a (whole) variable to a channel.
@@ -564,6 +554,14 @@ static void assign_single(
 	report("assign %s to %s;\n", vp->name, name);
 #endif
 
+	if (vp->type->tag != T_PV)
+	{
+		extra_warning_at_node(defn,
+			"assign adds missing pv qualifier to type of '%s' [deprecated]\n",
+			vp->name);
+		vp->type = mk_pv_type(vp->type);
+	}
+
 	if (vp->assign != M_NONE)
 	{
 		error_at_node(defn, "variable '%s' already assigned\n", vp->name);
@@ -583,11 +581,23 @@ static void assign_elem(
 	char		*pv_name
 )
 {
+	Type *pv_type;
+
 	assert(chan_list);				/* precondition */
 	assert(defn);					/* precondition */
 	assert(vp);					/* precondition */
-	assert(n_subscr < type_array_length1(vp->type));/*precondition */
+	assert(n_subscr < type_array_length1(vp->type));/* precondition */
 	assert(vp->assign != M_SINGLE);			/* precondition */
+
+	assert(vp->type->tag == T_ARRAY);
+	pv_type = vp->type->val.array.elem_type;
+	if (pv_type->tag != T_PV)
+	{
+		extra_warning_at_node(defn,
+			"assign adds missing pv qualifier to type of '%s' [deprecated]\n",
+			vp->name);
+		vp->type = mk_array_type(mk_pv_type(pv_type),vp->type->val.array.num_elems);
+	}
 
 	if (vp->assign == M_NONE)
 	{
@@ -1207,7 +1217,7 @@ static SyncQ *new_sync_queue(SyncQList *syncq_list, uint size)
 }
 
 /* Add a variable to a scope (append to the end of the var_list) */
-void add_var(Var *vp, Node *scope)
+void add_var_to_scope(Var *vp, Node *scope)
 {
 	VarList	*var_list = var_list_from_scope(scope);
 
@@ -1284,38 +1294,26 @@ static int connect_variable(Node *ep, Node *scope, void *parg)
 	if (!vp)
 	{
 		VarList *var_list = var_list_from_scope(scope);
-		struct const_symbol *csym;
-		struct func_symbol *fsym;
-
-		csym = lookup_builtin_const(st, ep->token.str);
-		if (csym)
+		Node *builtin_const = lookup_builtin_const(st, ep->token.str);
+		if (builtin_const)
 		{
-			ep->tag = E_CONST;
-			ep->extra.e_const = csym;
-			return FALSE;
-		}
-		fsym = lookup_builtin_func(st, ep->token.str);
-		if (fsym)
-		{
-			ep->tag = E_BUILTIN;
-			ep->extra.e_builtin = fsym;
+			*ep = *builtin_const;
 			return FALSE;
 		}
 
 		extra_warning_at_node(ep, "treating undeclared object '%s' as foreign\n",
 			ep->token.str);
-		/* create a pseudo declaration so we can finish the analysis phase */
+		/* create a variable without declaration and with no type */
 		vp = new(Var);
 		vp->name = ep->token.str;
-                vp->type = new(Type);
-		vp->type->tag = T_NONE;	/* undeclared type */
+		vp->type = mk_no_type();	/* undeclared type */
 		/* add this variable to the top-level scope, NOT the current scope */
 		while (var_list->parent_scope) {
 			scope = var_list->parent_scope;
 			var_list = var_list_from_scope(scope);
 		}
-		sym_table_insert(st, vp->name, var_list, vp);
-		add_var(vp, scope);
+		sym_table_insert(st, ep->token.str, var_list, vp);
+		add_var_to_scope(vp, scope);
 	}
 	ep->extra.e_var = vp;		/* make connection */
 	return FALSE;			/* there are no children anyway */
@@ -1601,6 +1599,8 @@ static uint assign_ef_bits(Node *scope)
 
 	var_list = var_list_from_scope(scope);
 
+	if (scope->tag == D_FUNCDEF)
+		return 0;
 	/* Assign event flag numbers (starting at 1) */
 	foreach (vp, var_list->first)
 	{

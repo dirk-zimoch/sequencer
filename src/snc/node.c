@@ -7,9 +7,6 @@ Copyright (c) 2010-2015 Helmholtz-Zentrum Berlin f. Materialien
 This file is distributed subject to a Software License Agreement found
 in the file LICENSE that is included with this distribution.
 \*************************************************************************/
-/*************************************************************************\
-                Parser support routines
-\*************************************************************************/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,6 +20,9 @@ in the file LICENSE that is included with this distribution.
 #undef node_info_GLOBAL
 #include "node.h"
 #include "main.h"
+#include "var_types.h"
+
+static const int impossible = 0;
 
 static const StateOptions default_state_options = DEFAULT_STATE_OPTIONS;
 
@@ -60,13 +60,17 @@ Node *node(
 	default:
 		break;
 	}
+	if (is_scope(ep))
+	{
+		var_list_from_scope(ep) = new(VarList);
+	}
 
 #ifdef	DEBUG
 	report_at_node(ep, "node: ep=%p, tag=%s, value=\"%s\", file=%s, line=%d",
 		ep, node_name(ep), tok.str, tok.file, tok.line);
 #endif	/*DEBUG*/
 	va_start(argp, tok);
-	for (i = 0; i < num_children; i++)
+	for (i = 0; i < node_info[ep->tag].num_children; i++)
 	{
 		ep->children[i] = va_arg(argp, Node*);
 #ifdef	DEBUG
@@ -119,4 +123,52 @@ uint strtoui(
 		return FALSE;
 	*pnumber = result;
 	return TRUE;
+}
+
+VarList **pvar_list_from_scope(Node *scope)
+{
+	assert(scope);				/* precondition */
+	assert(is_scope(scope));		/* precondition */
+
+	switch(scope->tag)
+	{
+	case D_PROG:
+		return &scope->extra.e_prog;
+	case D_SS:
+		assert(scope->extra.e_ss);	/* invariant */
+		return &scope->extra.e_ss->var_list;
+	case D_STATE:
+		assert(scope->extra.e_state);	/* invariant */
+		return &scope->extra.e_state->var_list;
+	case S_CMPND:
+		return &scope->extra.e_cmpnd;
+	case D_FUNCDEF:
+		return &scope->extra.e_funcdef;
+	default:
+		assert(impossible); return NULL;
+	}
+}
+
+Node *defn_list_from_scope(Node *scope)
+{
+	assert(scope);				/* precondition */
+	assert(is_scope(scope));		/* precondition */
+
+	switch(scope->tag)
+	{
+	case D_PROG:
+		return scope->prog_defns;
+	case D_SS:
+		return scope->ss_defns;
+	case D_STATE:
+		return scope->state_defns;
+	case S_CMPND:
+		return scope->cmpnd_defns;
+	case D_FUNCDEF:
+		assert(scope->funcdef_decl);			/* invariant */
+		assert(scope->funcdef_decl->extra.e_decl);	/* invariant */
+		return scope->funcdef_decl->extra.e_decl->type->val.function.param_decls;
+	default:
+		assert(impossible); return NULL;
+	}
 }

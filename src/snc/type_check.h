@@ -10,10 +10,8 @@ in the file LICENSE that is included with this distribution.
 #include "types.h"
 #include "var_types.h"
 
-/* return a first approximation of the type of an expression */
+/* return an approximation of the type of an expression */
 Type *type_of(Node *e);
-
-/* return whether the given expression has type function or pointer to function */
-int type_is_function(Node *e);
+void dump_expr(Node *e, int level);
 
 #endif /*INCLtype_checkh */

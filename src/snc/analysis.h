@@ -38,9 +38,7 @@ void traverse_syntax_tree(
 	void		*parg		/* argument to pass to function */
 );
 
-VarList **pvar_list_from_scope(Node *scope);
-#define var_list_from_scope(scope) (*pvar_list_from_scope(scope))
-Node *defn_list_from_scope(Node *scope);
+void add_var_to_scope(Var *vp, Node *scope);
 
 Program *analyse_program(Node *ep, Options options);
 
