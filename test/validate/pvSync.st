@@ -66,7 +66,7 @@ ss pvSyncY {
         when (efTestAndClear(ef_i)) {
             testPass("event on i=%d", i);
             pvSyncs(a, NTESTS, ef_a);
-            testDiag("after pvArraySync(a, NTESTS, ef_a)");
+            testDiag("after pvSyncs(a, NTESTS, ef_a)");
             a[i] = i;
             testOk1(pvPut(a[i])==pvStatOK);
             testDiag("after pvPut(a[i])");
