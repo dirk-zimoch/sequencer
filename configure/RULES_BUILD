@@ -63,11 +63,13 @@ endif
 
 %.c: %.i $(SNC)
 	$(ECHO) "compiling $< to C"
-	$(SNC) $(TARGET_SNCFLAGS) $(SNCFLAGS) $(USR_SNCFLAGS) $(call PATH_FILTER,$<) -o $(*F).c
+	$(SNC) $(TARGET_SNCFLAGS) $(SNCFLAGS) $(USR_SNCFLAGS) $(call PATH_FILTER,$<) -o $(*F).c.tmp
+	$(MV) $(*F).c.tmp $@
 
 %.c: %.stt $(SNC)
 	$(ECHO) "compiling $< to C"
-	$(SNC) $(TARGET_SNCFLAGS) $(SNCFLAGS) $(USR_SNCFLAGS) $(call PATH_FILTER,$<) -o $(*F).c
+	$(SNC) $(TARGET_SNCFLAGS) $(SNCFLAGS) $(USR_SNCFLAGS) $(call PATH_FILTER,$<) -o $(*F).c.tmp
+	$(MV) $(*F).c.tmp $@
 
 CLEANS += $(wildcard *.d)
 
