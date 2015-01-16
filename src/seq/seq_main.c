@@ -167,12 +167,6 @@ static boolean init_sprog(PROG *sp, seqProgram *seqProg)
 		errlogSevPrintf(errlogFatal, "init_sprog: epicsEventCreate failed\n");
 		return FALSE;
 	}
-	sp->dead = epicsEventCreate(epicsEventEmpty);
-	if (!sp->dead)
-	{
-		errlogSevPrintf(errlogFatal, "init_sprog: epicsEventCreate failed\n");
-		return FALSE;
-	}
 
 	/* Allocate an array for event flag bits. Note this does
 	   *not* reserve space for all event numbers (i.e. including

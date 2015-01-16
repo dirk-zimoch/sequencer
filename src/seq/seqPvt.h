@@ -206,7 +206,6 @@ struct program_instance
 	void		*pvReqPool;	/* freeList for pv requests (has own lock) */
 	boolean		die;		/* flag set when seqStop is called */
 	epicsEventId	ready;		/* all channels connected & got 1st monitor */
-	epicsEventId	dead;		/* event to signal exit of main thread done */
 	PROG		*next;		/* next element in program list */
 };
 
