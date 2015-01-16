@@ -43,7 +43,7 @@ typedef struct func_symbol	FuncSym;
 typedef struct const_symbol	ConstSym;
 typedef struct type		Type;		/* struct defined in var_types.h */
 
-typedef unsigned long long	TypeMask;
+typedef unsigned long long	NodeMask;
 typedef unsigned int		uint;
 
 struct sym_table
@@ -159,7 +159,7 @@ enum node_tag			/* description [child nodes...] */
 };
 
 /* make sure we have no more node types than bits */
-STATIC_ASSERT(NUM_EXPR_TYPES <= 8*sizeof(TypeMask));
+STATIC_ASSERT(NUM_EXPR_TYPES <= 8*sizeof(NodeMask));
 
 struct syntax_node			/* generic syntax node */
 {
@@ -282,7 +282,7 @@ struct program
 
 /* Generic iteration on lists */
 #define foreach(e,l)		for (e = l; e != 0; e = e->next)
-#define bit(bitn)		((TypeMask)(1ull)<<(bitn))
+#define bit(bitn)		((NodeMask)(1ull)<<(bitn))
 
 /* Commonly used sets of syntax_node tags */
 

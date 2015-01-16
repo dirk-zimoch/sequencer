@@ -31,8 +31,8 @@ typedef int node_iter(Node *ep, Node *scope, void *parg);
 
 void traverse_syntax_tree(
 	Node		*ep,		/* start node */
-	TypeMask	call_mask,	/* when to call iteratee */
-	TypeMask	stop_mask,	/* when to stop descending */
+	NodeMask	call_mask,	/* when to call iteratee */
+	NodeMask	stop_mask,	/* when to stop descending */
 	Node		*scope,		/* current scope, 0 at top-level */
 	node_iter	*iteratee,	/* function to call */
 	void		*parg		/* argument to pass to function */
