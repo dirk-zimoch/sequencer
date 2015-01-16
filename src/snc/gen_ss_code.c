@@ -983,10 +983,13 @@ static void gen_prog_init_body(uint context, Node *prog, ChanList *channels)
 	Var	*vp;
 
 	assert(prog->tag == D_PROG);
+	indent(1); gen_code("/* Create event flags */\n");
 	foreach(vp, prog->extra.e_prog->first)
 		gen_ef_init(context, vp, 0);
+	indent(1); gen_code("/* Create channels */\n");
 	foreach (cp, channels->first)
 		gen_channel(context, cp);
+	indent(1); gen_code("/* Initialize variables */\n");
 	gen_user_var_init(context, prog, 1);
 }
 
