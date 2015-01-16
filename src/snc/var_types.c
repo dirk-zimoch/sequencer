@@ -90,7 +90,7 @@ Node *mk_decl(Node *d, Type *t)
     }
     switch (d->tag) {
     case E_ASSOP:
-        /* initializer */
+        /* initialiser */
         assert(d->token.symbol == TOK_EQUAL);
         r = mk_decl(d->assop_left, t);
         assert(r->tag == D_DECL);      /* post condition */
@@ -99,22 +99,22 @@ Node *mk_decl(Node *d, Type *t)
     case E_VAR:
         return new_decl(d->token, t);
     case E_PRE:
+        /* prefix type operator */
         switch (d->token.symbol) {
         case TOK_ASTERISK:
+            /* pointer */
             switch (t->tag)
             {
             case T_NONE:
                 error_at_node(d, "pointer to foreign entity\n");
                 assert(impossible);
                 break;
-            case T_EVFLAG:
-                error_at_node(d, "pointer to event flag\n");
-                break;
             default:
                 break;
             }
             return mk_decl(d->pre_operand, mk_pointer_type(t));
         case TOK_CONST:
+            /* const */
             switch (t->tag) {
             case T_NONE:
                 error_at_node(d, "constant foreign entity\n");
@@ -145,16 +145,19 @@ Node *mk_decl(Node *d, Type *t)
                 return mk_decl(d->pre_operand, mk_const_type(t));
             }
         case TOK_PV:
+            /* pv */
             if (t->is_const) {
                 error_at_node(d, "pv of constant\n");
                 return mk_decl(d->pre_operand, t);
             }
-            if (t->tag == T_PV) {
+#if 0
+            /* type_is_valid_pv_child below already catches this error */
+            if (type_contains_pv(t)) {
                 error_at_node(d, "repeated pv\n");
                 return mk_decl(d->pre_operand, t->val.pv.value_type);
             }
-            if (t->tag == T_VOID || t->tag == T_PRIM ||
-                    (t->tag == T_ARRAY && t->val.array.elem_type->tag == T_PRIM)) {
+#endif
+            if (t->tag == T_VOID || type_is_valid_pv_child(t)) {
                 return mk_decl(d->pre_operand, mk_pv_type(t));
             } else {
                 error_at_node(d, "invalid pv type\n");
@@ -165,13 +168,11 @@ Node *mk_decl(Node *d, Type *t)
         }
         break;
     case E_SUBSCR:
+        /* array */
         switch (t->tag) {
         case T_NONE:
             error_at_node(d, "array of foreign entities\n");
             assert(impossible);
-            break;
-        case T_EVFLAG:
-            error_at_node(d, "array of event flags\n");
             break;
         case T_VOID:
             error_at_node(d, "array of void\n");
@@ -186,13 +187,11 @@ Node *mk_decl(Node *d, Type *t)
         }
         return mk_decl(d->subscr_operand, mk_array_type(t, num_elems));
     case E_FUNC:
+        /* function */
         switch (t->tag) {
         case T_NONE:
             error_at_node(d, "function returning foreign entity\n");
             assert(impossible);
-            break;
-        case T_EVFLAG:
-            error_at_node(d, "function returning event flag\n");
             break;
         default:
             break;
@@ -297,14 +296,22 @@ Type *mk_function_type(Type *t, Node *ps)
 Type *mk_structure_type(const char *name, Node *members)
 {
     Type *r = new(Type);
+    Node *member;
 
     r->tag = T_STRUCT;
     r->val.structure.member_decls = members;
+    foreach (member, members) {
+        if (member->tag == D_DECL) {
+            /* do not count escaped code blocks */
+            r->val.structure.num_members++;
+        }
+    }
     r->val.structure.name = name;
+    r->val.structure.mark = 0;
     return r;
 }
 
-unsigned type_array_length1(Type *t)
+unsigned type_array_length(Type *t)
 {
     switch (t->tag) {
     case T_ARRAY:
@@ -314,20 +321,10 @@ unsigned type_array_length1(Type *t)
     }
 }
 
-unsigned type_array_length2(Type *t)
+unsigned type_assignable(Type *t)
 {
-    switch (t->tag) {
-    case T_ARRAY:
-        return type_array_length1(t->val.array.elem_type);
-    default:
-        return 1;
-    }
-}
+    Node *member;
 
-static unsigned type_assignable_array(Type *t, int depth)
-{
-    if (depth > 2)
-        return FALSE;
     if (t->is_const)
         return FALSE;
     switch (t->tag) {
@@ -337,23 +334,26 @@ static unsigned type_assignable_array(Type *t, int depth)
     case T_FUNCTION:
     case T_EVFLAG:
     case T_VOID:
-    case T_STRUCT:  /* for now, at least */
         return FALSE;
+    case T_STRUCT:
+        foreach (member, t->val.structure.member_decls) {
+            if (member->tag != D_DECL || !type_assignable(member->extra.e_decl->type))
+                return FALSE;
+        }
+        return TRUE;
     case T_ARRAY:
-        return type_assignable_array(t->val.array.elem_type, depth + 1);
+        return type_assignable(t->val.array.elem_type);
     case T_PRIM:
         return TRUE;
     case T_PV:
-        return type_assignable_array(t->val.pv.value_type, depth);
+        return TRUE;    /* already checked, see mk_decl */
+#if 0
+        return type_assignable(t->val.pv.value_type);
+#endif
     }
     /* avoid bogus compiler warning: */
     assert(impossible);
     return FALSE;
-}
-
-unsigned type_assignable(Type *t)
-{
-    return type_assignable_array(t, 0);
 }
 
 enum assoc {
@@ -522,7 +522,7 @@ void dump_type(Type *t, int l)
     }
 }
 
-static Type *child_type(Type *t)
+Type *child_type(Type *t)
 {
     switch (t->tag) {
     case T_NONE:
@@ -553,6 +553,8 @@ Type *base_type(Type *t)
         return t;
 }
 
+void dump_expr(Node *e, int level);
+
 Type *type_contains_pv(Type *t)
 {
     Type *ct = child_type(t);
@@ -560,6 +562,26 @@ Type *type_contains_pv(Type *t)
         return t;
     else if (ct)
         return type_contains_pv(ct);
+#if 0
+    else if (t->tag == T_STRUCT) {
+        Node *member;
+        if (t->val.structure.mark) {
+            return 0;
+        }
+        t->val.structure.mark = 1;
+        foreach(member, t->val.structure.member_decls) {
+            if (member->tag == D_DECL) {
+                Type *mt = type_contains_pv(member->extra.e_decl->type);
+                if (mt) {
+                    t->val.structure.mark = 0;
+                    return mt;
+                }
+            }
+        }
+        t->val.structure.mark = 0;
+        return 0;
+    }
+#endif
     else
         return 0;
 }

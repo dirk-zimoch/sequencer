@@ -33,24 +33,22 @@ in the file LICENSE that is included with this distribution.
 typedef struct event_mask_args {
 	seqMask	*event_words;
 	uint	num_event_flags;
-} event_mask_args;
+} EventMaskArgs;
 
 static void gen_state_table(Node *ss_list, uint num_event_flags, uint num_channels);
 static void fill_state_struct(Node *sp, char *ss_name, uint ss_num);
 static void gen_prog_table(Program *p);
-static void encode_options(Options options);
+static void encode_options(Options *options);
 static void encode_state_options(StateOptions options);
 static void gen_ss_table(Node *ss_list);
 static void gen_state_event_mask(Node *sp, uint num_event_flags,
 	seqMask *event_words, uint num_event_words);
-static int iter_event_mask_scalar(Node *ep, Node *scope, void *parg);
-static int iter_event_mask_array(Node *ep, Node *scope, void *parg);
 
 /* Generate all kinds of tables for a SNL program. */
 void gen_tables(Program *p)
 {
 	gen_code("\n/************************ Tables ************************/\n");
-	gen_state_table(p->prog->prog_statesets, p->num_event_flags, p->chan_list->num_elems);
+	gen_state_table(p->prog->prog_statesets, p->evflag_list->num_elems, p->chan_list->num_elems);
 	gen_ss_table(p->prog->prog_statesets);
 	gen_prog_table(p);
 }
@@ -169,12 +167,12 @@ static void gen_prog_table(Program *p)
 	gen_code("\t/* num. channels */     %d,\n", p->chan_list->num_elems);
 	gen_code("\t/* state sets */        " NM_STATESETS ",\n");
 	gen_code("\t/* num. state sets */   %d,\n", p->num_ss);
-	if (p->options.reent)
+	if (p->options->reent)
 		gen_code("\t/* user var size */     sizeof(struct %s),\n", NM_VARS);
 	else
 		gen_code("\t/* user var size */     0,\n");
 	gen_code("\t/* param */             \"%s\",\n", p->param);
-	gen_code("\t/* num. event flags */  %d,\n", p->num_event_flags);
+	gen_code("\t/* num. event flags */  %d,\n", p->evflag_list->num_elems);
 	gen_code("\t/* encoded options */   "); encode_options(p->options);
 	gen_code("\t/* init func */         " NM_INIT ",\n");
 	gen_code("\t/* entry func */        %s,\n", p->prog->prog_entry ? NM_ENTRY : "0");
@@ -183,223 +181,174 @@ static void gen_prog_table(Program *p)
 	gen_code("};\n");
 }
 
-static void encode_options(Options options)
+static void encode_options(Options *options)
 {
 	gen_code("(0");
-	if (options.async)
+	if (options->async)
 		gen_code(" | OPT_ASYNC");
-	if (options.conn)
+	if (options->conn)
 		gen_code(" | OPT_CONN");
-	if (options.debug)
+	if (options->debug)
 		gen_code(" | OPT_DEBUG");
-	if (options.newef)
+	if (options->newef)
 		gen_code(" | OPT_NEWEF");
-	if (options.reent)
+	if (options->reent)
 		gen_code(" | OPT_REENT");
-	if (options.safe)
+	if (options->safe)
 		gen_code(" | OPT_SAFE");
 	gen_code("),\n");
+}
+
+/*
+ * A simpler version of the same named function in analysis.c.
+ * It works on arbitrary expressions and returns NULL if the
+ * expression is not a var_expr.
+ */
+static ChanNode *traverse_var_expr(Node *vxp)
+{
+	Type *t;
+	ChanNode *chan_node;
+	uint index;
+	Node *member;
+
+	switch (vxp->tag)
+	{
+	case E_VAR:
+		return vxp->extra.e_var->chan;
+	case E_SUBSCR:
+		chan_node = traverse_var_expr(vxp->subscr_operand);
+		if (!chan_node)
+			return 0;
+		t = chan_node->type;
+		if (t->tag != T_ARRAY)
+			return 0;
+		if (vxp->subscr_index->tag != E_CONST)
+			return chan_node;
+		if (!strtoui(vxp->subscr_index->token.str, t->val.array.num_elems, &index))
+		{
+			error_at_node(vxp->subscr_index, "subscript '[%s]' out of range\n",
+				vxp->subscr_index->token.str);
+			return 0;
+		}
+		return chan_node->val.nodes[index];
+	case E_SELECT:
+		chan_node = traverse_var_expr(vxp->select_left);
+		if (!chan_node)
+			return 0;
+		t = chan_node->type;
+		if (t->tag != T_STRUCT)
+			return 0;
+		if (vxp->select_right->tag != E_MEMBER)
+			return chan_node;
+		index = 0;
+		foreach (member, t->val.structure.member_decls)
+		{
+			if (strcmp(member->token.str, vxp->select_right->token.str) == 0)
+				break;
+			index++;
+		}
+		return chan_node->val.nodes[index];
+	default:
+		return 0;
+	}
+}
+
+static uint set_channel_bit(Chan *chan, void *env)
+{
+	EventMaskArgs *args = (EventMaskArgs *)env;
+	bitSet(args->event_words, 1 + args->num_event_flags + chan->index);
+	return FALSE;
+}
+
+static uint set_evflag_bit(EvFlag *ef, void *env)
+{
+	EventMaskArgs *args = (EventMaskArgs *)env;
+	bitSet(args->event_words, 1 + ef->index);
+	return FALSE;
+}
+
+static int iter_event_mask(Node *expr, Node *scope, void *parg)
+{
+	ChanNode *chan_node;
+
+	chan_node = traverse_var_expr(expr);
+	traverse_channel_tree(chan_node, set_channel_bit, set_evflag_bit, parg);
+	return FALSE;
 }
 
 /* Generate event mask for a single state. The event mask has a bit set for each
    event flag and for each process variable (assigned var) used in one of the
    state's when() conditions. The bits from 1 to num_event_flags are for the
    event flags. The bits from num_event_flags+1 to num_event_flags+num_channels
-   are for process variables. Bit zero is not used for whatever mysterious reason
-   I cannot tell. */
+   are for process variables. Bit zero is used in the runtime system to denote
+   all possible events. */
 static void gen_state_event_mask(Node *sp, uint num_event_flags,
 	seqMask *event_words, uint num_event_words)
 {
-	uint	n;
-	Node	*tp;
+	uint		n;
+	Node		*tp;
+	EventMaskArgs	em_args = { event_words, num_event_flags };
 
 	for (n = 0; n < num_event_words; n++)
 		event_words[n] = 0;
 
-	/* Look at the when() conditions for references to event flags
-	 * and assigned variables.  Database variables might have a subscript,
-	 * which could be a constant (set a single event bit) or an expression
-	 * (set a group of bits for the possible range of the evaluated expression)
-	 */
 	foreach (tp, sp->state_whens)
 	{
-		event_mask_args em_args = { event_words, num_event_flags };
-
-		/* look for scalar variables and event flags */
-		traverse_syntax_tree(tp->when_cond, bit(E_VAR), 0, 0,
-			iter_event_mask_scalar, &em_args);
-
-		/* look for arrays and subscripted array elements */
-		traverse_syntax_tree(tp->when_cond, bit(E_VAR)|bit(E_SUBSCR), 0, 0,
-			iter_event_mask_array, &em_args);
+		traverse_syntax_tree(tp->when_cond,
+			bit(E_VAR)|bit(E_SUBSCR)|bit(E_SELECT), 0, 0,
+			iter_event_mask, &em_args);
 	}
 #ifdef DEBUG
-	report("event mask for state %s is", sp->token.str);
+	report("event mask for state %s is ", sp->token.str);
+#if 0
 	for (n = 0; n < num_event_words; n++)
-		report(" 0x%lx", (unsigned long)event_words[n]);
+		report("%8lx", (unsigned long)event_words[n]);
+#endif
+	dump_mask(event_words, num_event_words);
 	report("\n");
 #endif
 }
 
-#define bitnum(var_ix, ch_ix, num_efs) ((var_ix)+(ch_ix)+(num_efs)+1)
+#define WORD_BIN_FMT "%u%u%u%u%u%u%u%u'%u%u%u%u%u%u%u%u'%u%u%u%u%u%u%u%u'%u%u%u%u%u%u%u%u"
+#define WORD_BIN(word) \
+  ((word) & (1u<<31) ? 1u : 0), \
+  ((word) & (1u<<30) ? 1u : 0), \
+  ((word) & (1u<<29) ? 1u : 0), \
+  ((word) & (1u<<28) ? 1u : 0), \
+  ((word) & (1u<<27) ? 1u : 0), \
+  ((word) & (1u<<26) ? 1u : 0), \
+  ((word) & (1u<<25) ? 1u : 0), \
+  ((word) & (1u<<24) ? 1u : 0), \
+  ((word) & (1u<<23) ? 1u : 0), \
+  ((word) & (1u<<22) ? 1u : 0), \
+  ((word) & (1u<<21) ? 1u : 0), \
+  ((word) & (1u<<20) ? 1u : 0), \
+  ((word) & (1u<<19) ? 1u : 0), \
+  ((word) & (1u<<18) ? 1u : 0), \
+  ((word) & (1u<<17) ? 1u : 0), \
+  ((word) & (1u<<16) ? 1u : 0), \
+  ((word) & (1u<<15) ? 1u : 0), \
+  ((word) & (1u<<14) ? 1u : 0), \
+  ((word) & (1u<<13) ? 1u : 0), \
+  ((word) & (1u<<12) ? 1u : 0), \
+  ((word) & (1u<<11) ? 1u : 0), \
+  ((word) & (1u<<10) ? 1u : 0), \
+  ((word) & (1u<< 9) ? 1u : 0), \
+  ((word) & (1u<< 8) ? 1u : 0), \
+  ((word) & (1u<< 7) ? 1u : 0), \
+  ((word) & (1u<< 6) ? 1u : 0), \
+  ((word) & (1u<< 5) ? 1u : 0), \
+  ((word) & (1u<< 4) ? 1u : 0), \
+  ((word) & (1u<< 3) ? 1u : 0), \
+  ((word) & (1u<< 2) ? 1u : 0), \
+  ((word) & (1u<< 1) ? 1u : 0), \
+  ((word) & (1u<< 0) ? 1u : 0)
 
-/* Iteratee for scalar variables (including event flags). */
-static int iter_event_mask_scalar(Node *ep, Node *scope, void *parg)
+void dump_mask(seqMask *mask, uint num_words)
 {
-	event_mask_args	*em_args = (event_mask_args *)parg;
-	Chan		*cp;
-	Var		*vp;
-	uint		num_event_flags = em_args->num_event_flags;
-	seqMask		*event_words = em_args->event_words;
-	Type		*t;
-
-#ifdef DEBUG
-	report("  iter_event_mask_scalar: enter\n");
-#endif
-	assert(ep->tag == E_VAR);
-	vp = ep->extra.e_var;
-	assert(vp != 0);
-
-	if (vp->type->tag == T_EVFLAG)
+	int n;
+	for (n = num_words-1; n >= 0; n--)
 	{
-#ifdef DEBUG
-		report("  iter_event_mask_scalar: evflag: %s, ef_num=%d\n",
-			vp->name, vp->chan.evflag->index);
-#endif
-		bitSet(event_words, vp->chan.evflag->index);
-		return FALSE;		/* no children anyway */
-	}
-#ifdef DEBUG
-	report("  iter_event_mask_scalar: name=%s, type=\n", vp->name);
-	dump_type(vp->type, 2);
-	report("    assign=%d\n", vp->assign);
-#endif
-	t = type_contains_pv(vp->type);
-#ifdef DEBUG
-	report("    type_under_pv=\n");
-	if (t)
-		dump_type(t, 2);
-#endif
-	if (!t || strip_pv_type(t)->tag != T_PRIM)
-		return FALSE;		/* no children anyway */
-
-	/* if not associated with channel, return */
-	if (vp->assign == M_NONE)
-		return FALSE;
-	if (vp->assign != M_SINGLE)	/* what about by L3? */
-		return FALSE;
-	cp = vp->chan.single;
-
-	bitSet(event_words, bitnum(vp->index,cp->index,num_event_flags));
-#ifdef DEBUG
-	report("  iter_event_mask_scalar: var: %s, event bit=%d+%d+%d+1=%d\n",
-		vp->name, vp->index, cp->index, num_event_flags,
-		bitnum(vp->index,cp->index,num_event_flags));
-#endif
-	return FALSE;		/* no children anyway */
-}
-
-/* Iteratee for array variables. */
-static int iter_event_mask_array(Node *ep, Node *scope, void *parg)
-{
-	event_mask_args	*em_args = (event_mask_args *)parg;
-	uint		num_event_flags = em_args->num_event_flags;
-	seqMask		*event_words = em_args->event_words;
-
-	Var		*vp=0;
-	Node		*e_var=0, *e_ix=0;
-
-#ifdef DEBUG
-	report("  iter_event_mask_array: enter\n");
-#endif
-	assert(ep->tag == E_SUBSCR || ep->tag == E_VAR);
-
-	if (ep->tag == E_SUBSCR)
-	{
-		e_var = ep->subscr_operand;
-		e_ix = ep->subscr_index;
-		assert(e_var != 0);
-		assert(e_ix != 0);
-		if (e_var->tag != E_VAR)
-			return TRUE;
-	}
-	if (ep->tag == E_VAR)
-	{
-		e_var = ep;
-		e_ix = 0;
-	}
-
-	vp = e_var->extra.e_var;
-	assert(vp != 0);
-
-	/* this subroutine handles only the array variables */
-	if (vp->type->tag != T_ARRAY)
-		return TRUE;
-
-	assert(vp->type->tag == T_ARRAY);
-
-	if (vp->assign == M_NONE)
-	{
-		return FALSE;
-	}
-	else if (vp->assign == M_SINGLE)
-	{
-		uint ix = vp->chan.single->index;
-#ifdef DEBUG
-		report("  iter_event_mask_array: %s, event bit=%d+%d+%d+1=%d\n",
-			vp->name, vp->index, ix, num_event_flags,
-			bitnum(vp->index,ix,num_event_flags));
-#endif
-		bitSet(event_words, bitnum(vp->index,ix,num_event_flags));
-		return TRUE;
-	}
-	else
-	{
-		uint length1 = type_array_length1(vp->type);
-
-		assert(vp->assign == M_MULTI);
-		/* an array variable subscripted with a constant */
-		if (e_ix && e_ix->tag == E_CONST)
-		{
-			uint ix;
-
-			if (!strtoui(e_ix->token.str, length1, &ix))
-			{
-				error_at_node(e_ix,
-					"subscript in '%s[%s]' out of range\n",
-					vp->name, e_ix->token.str);
-				return FALSE;
-			}
-#ifdef DEBUG
-			report("  iter_event_mask_array: %s, event bit=%d+%d+%d+1=%d\n",
-				vp->name, vp->index, ix, num_event_flags,
-                                bitnum(vp->index,ix,num_event_flags));
-#endif
-			bitSet(event_words, bitnum(vp->index,ix,num_event_flags));
-			return FALSE;	/* important: do NOT descend further
-				   	   otherwise will find the array var and
-				   	   set all the bits (see below) */
-		}
-		else if (e_ix)	/* subscript is an expression */
-		{
-			/* must descend for the array variable (see below) and
-			   possible array vars inside subscript expression */
-			return TRUE;
-		}
-		else /* no subscript */
-		{
-			/* set all event bits for this variable */
-			uint ix;
-#ifdef DEBUG
-			report("  iter_event_mask_array: %s, event bits=%d..(%d)\n",
-				vp->name, bitnum(vp->index,0,num_event_flags),
-				bitnum(vp->index,length1,num_event_flags));
-#endif
-			for (ix = 0; ix < length1; ix++)
-			{
-				bitSet(event_words, bitnum(vp->index,ix,num_event_flags));
-			}
-			return FALSE;	/* no children anyway */
-		}
+		report("%s"WORD_BIN_FMT, n?"'":"", WORD_BIN(mask[n]));
 	}
 }

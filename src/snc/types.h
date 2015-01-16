@@ -36,7 +36,9 @@ typedef struct event_flag	EvFlag;
 typedef struct sync_queue	SyncQ;
 typedef struct syntax_node	Node;
 typedef struct variable		Var;
-typedef struct chan_list	ChanList;
+typedef struct channel_node	ChanNode;
+typedef struct channel_list	ChanList;
+typedef struct event_flag_list	EvFlagList;
 typedef struct sync_queue_list	SyncQList;
 typedef struct var_list		VarList;
 typedef struct func_symbol	FuncSym;
@@ -112,19 +114,19 @@ struct state_set			/* extra data for state set clauses */
 /* Expression types */
 enum node_tag			/* description [child nodes...] */
 {
-	D_ASSIGN,		/* assign statement [subscr,pvs] */
+	D_ASSIGN,		/* assign statement [var_expr,pvs] */
 	D_DECL,			/* variable declaration [init] */
 	D_ENTEX,		/* entry or exit statement [block] */
 	D_ENUMDEF,		/* enum definition [choices] */
 	D_FUNCDEF,		/* function definition [decl,block] */
-	D_MONITOR,		/* monitor statement [subscr] */
+	D_MONITOR,		/* monitor statement [var_expr] */
 	D_OPTION,		/* option definition [] */
 	D_PROG,			/* whole program [param,defns,entry,statesets,exit,xdefns] */
 	D_SS,			/* state set statement [defns,states] */
 	D_STATE,		/* state statement [defns,entry,whens,exit] */
 	D_STRUCTDEF,		/* struct definition [members] */
-	D_SYNC,			/* sync statement [subscr,evflag] */
-	D_SYNCQ,		/* syncq statement [subscr,evflag,maxqsize] */
+	D_SYNC,			/* sync statement [var_expr,evflag] */
+	D_SYNCQ,		/* syncq statement [var_expr,evflag,maxqsize] */
 	D_WHEN,			/* when statement [cond,block] */
 
 	E_ASSOP,		/* assignment operator [left,right] */
@@ -132,7 +134,7 @@ enum node_tag			/* description [child nodes...] */
 	E_CAST,			/* type cast [type,operand] */
 	E_CONST,		/* numeric (inkl. character) constant [] */
 	E_FUNC,			/* function call [expr,args] */
-	E_INIT,			/* array or struct initializer [elems] */
+	E_INIT,			/* array or struct initialiser [elems] */
 	E_MEMBER,		/* struct or union member [] */
 	E_PAREN,		/* parenthesized expression [expr] */
 	E_POST,			/* unary postfix operator [operand] */
@@ -181,14 +183,9 @@ struct syntax_node			/* generic syntax node */
 		VarList	*e_cmpnd;	/* block local declarations */
 		VarList *e_funcdef;	/* parameters */
 		Type	*e_cast;	/* the type to cast to */
+		uint	*e_const;	/* constant index, if evaluated */
 	}	extra;
 	Type		*type;		/* type of an expression */
-};
-
-struct event_flag
-{
-	uint	index;
-	uint	queued;
 };
 
 struct variable				/* variable definition */
@@ -199,38 +196,38 @@ struct variable				/* variable definition */
 					   (or NULL if not declared) */
 	Node	*scope;			/* scope of this variable */
 	Type	*type;			/* type of this variable */
-	/* channel stuff */
-	uint	assign:2;		/* assigned: one of enum multiplicity */
-	uint	monitor:2;		/* monitored: one of enum multiplicity */
-	uint	sync:2;			/* sync'd: one of enum multiplicity */
-	uint	syncq:2;		/* syncq'd: one of enum multiplicity */
-	union {
-		Chan	*single;	/* single channel if assign == ALL */
-		Chan	**multi;	/* multiple channels if assign == SOME */
-		EvFlag	*evflag;	/* event flag data if this is an event flag */
-	} chan;
-	uint	index;			/* index (base) in seqChan array */
+
+	ChanNode *chan;			/* root of channel tree */
 };
-/* Laws (Invariants):
-L1a:	monitor	== M_MULTI	=> assign == M_MULTI
-L1b:	sync	== M_MULTI	=> assign == M_MULTI
-L1c:	syncq	== M_MULTI	=> assign == M_MULTI
-L2a:	assign	== M_NONE	=> monitor == M_NONE
-L2b:	assign	== M_NONE	=> sync == M_NONE
-L2c:	assign	== M_NONE	=> syncq == M_NONE
-L3:	assign	== M_MULTI	=> type->tag == T_ARRAY
-*/
+
+struct channel_node
+{
+	Type	*type;			/* cached type of this part of the variable */
+	union
+	{
+		ChanNode **nodes;	/* array of subnode ptrs (T_ARRAY, T_STRUCT) */
+		Chan	 *chan;		/* channel data (T_PV) */
+		EvFlag	 *evflag;	/* event flag data (T_EVFLAG) */
+	} val;
+};
 
 struct channel				/* channel assignment info */
 {
 	Chan	*next;			/* link to next channel in list */
-	char	*name;			/* channel (pv) name */
-	uint	index;			/* index (offset) if array element */
-	Var	*var;			/* variable definition */
-	uint	count;			/* request count for pv access */
+	char	*name;			/* channel name */
+	uint	index;			/* index in channel list */
+	Node	*expr;			/* path from variable to this part */
+	Type	*type;			/* cached type of this part */
 	uint	monitor:1;		/* whether this channel is monitored */
 	Var	*sync;			/* event flag variable if sync'd */
 	SyncQ	*syncq;			/* sync queue if syncQ'd */
+};
+
+struct event_flag
+{
+	EvFlag	*next;			/* link to next event flag in list */
+	uint	index;			/* index in event flag list */
+	Node	*expr;			/* path from variable to this part */
 };
 
 struct sync_queue
@@ -240,9 +237,15 @@ struct sync_queue
 	uint	size;
 };
 
-struct chan_list
+struct channel_list
 {
 	Chan	*first, *last;		/* first and last member of the list */
+	uint	num_elems;		/* number of elements in this list */
+};
+
+struct event_flag_list
+{
+	EvFlag	*first, *last;		/* first and last member of the list */
 	uint	num_elems;		/* number of elements in this list */
 };
 
@@ -268,12 +271,12 @@ struct program
 	char		*param;		/* parameter string for program stmt */
 
 	/* these are calculated in the analysis phase */
-	Options		options;	/* program options, from source or command line */
+	Options		*options;	/* program options, from source or command line */
 	SymTable	sym_table;	/* symbol table */
 	ChanList	*chan_list;	/* channel list, incl. number of channels */
+	EvFlagList	*evflag_list;	/* event flag list, incl. number of event flags */
 	SyncQList	*syncq_list;	/* syncq list, incl. number of syncqs */
 	uint		num_ss;		/* number of state sets */
-	uint		num_event_flags;/* number of event flags */
 };
 
 /* Allocation */
@@ -309,16 +312,8 @@ struct program
 
 #define node_name(e)		node_info[(e)->tag].name
 
-/* for channel assign, monitor, sync, and syncq */
-enum multiplicity
-{
-	M_NONE,			/* not at all */
-	M_SINGLE,		/* whole variable (array or scalar) */
-	M_MULTI			/* array, each element treated separately */
-};
-
 /* Accessors for child expressions */
-#define assign_subscr	children[0]
+#define assign_expr	children[0]
 #define assign_pvs	children[1]
 #define assop_left	children[0]
 #define assop_right	children[1]
@@ -343,7 +338,7 @@ enum multiplicity
 #define if_then		children[1]
 #define if_else		children[2]
 #define init_elems	children[0]
-#define monitor_subscr	children[0]
+#define monitor_expr	children[0]
 #define paren_expr	children[0]
 #define post_operand	children[0]
 #define pre_operand	children[0]
@@ -367,9 +362,9 @@ enum multiplicity
 #define structdef_members	children[0]
 #define subscr_operand	children[0]
 #define subscr_index	children[1]
-#define sync_subscr	children[0]
+#define sync_expr	children[0]
 #define sync_evflag	children[1]
-#define syncq_subscr	children[0]
+#define syncq_expr	children[0]
 #define syncq_evflag	children[1]
 #define syncq_size	children[2]
 #define ternop_cond	children[0]

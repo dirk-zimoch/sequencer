@@ -30,7 +30,7 @@ static Var *mk_var(Node *scope, char *name, Type *type)
     vp->name = name;
     vp->type = type;
     if (type->tag == T_EVFLAG)
-        vp->chan.evflag = new(EvFlag);
+        vp->chan->val.evflag = new(EvFlag);
     add_var_to_scope(vp, scope);
     return vp;
 }

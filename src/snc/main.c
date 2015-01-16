@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
 
 	exp = parse_program(in, input_name);
 
-        prg = analyse_program(exp, options);
+        prg = analyse_program(exp, &options);
 
 	if (err_cnt == 0)
 		generate_code(prg);

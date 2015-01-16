@@ -12,6 +12,7 @@ in the file LICENSE that is included with this distribution.
 \*************************************************************************/
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <limits.h>
 #include <assert.h>
 
@@ -22,6 +23,7 @@ in the file LICENSE that is included with this distribution.
 #include "builtin.h"
 #include "gen_code.h"
 #include "var_types.h"
+#include "snl.h"
 #include "analysis.h"
 
 static const int impossible = 0;
@@ -33,24 +35,22 @@ void *structdefs = &structdefs;
 static void analyse_definitions(Program *p);
 static void analyse_option(Options *options, Node *defn);
 static void analyse_state_option(StateOptions *options, Node *defn);
-static void analyse_declaration(SymTable st, ChanList *chan_list, Node *scope, Node *defn);
+static void analyse_declaration(SymTable st, ChanList *chan_list, EvFlagList *evflag_list, Node *scope, Node *defn);
 static void analyse_assign(SymTable st, ChanList *chan_list, Node *scope, Node *defn);
 static void analyse_monitor(SymTable st, Node *scope, Node *defn);
 static void analyse_sync(SymTable st, Node *scope, Node *defn);
 static void analyse_syncq(SymTable st, SyncQList *syncq_list, Node *scope, Node *defn);
-static void assign_subscript(ChanList *chan_list, Node *defn, Var *vp, Node *subscr, Node *pv_name);
-static void assign_single(ChanList *chan_list, Node *defn, Var *vp, Node *pv_name);
-static void assign_multi(ChanList *chan_list, Node *defn, Var *vp, Node *pv_name_list);
-static Chan *new_channel(ChanList *chan_list, Var *vp, uint count, uint index);
+static Chan *new_channel(ChanList *chan_list, Type *type, Node *expr);
+static EvFlag *new_event_flag(EvFlagList *evflag_list, Node *expr);
 static SyncQ *new_sync_queue(SyncQList *syncq_list, uint size);
+static int connect_variable(Node *ep, Node *scope, void *parg);
 static void connect_variables(SymTable st, Node *scope);
 static void connect_state_change_stmts(SymTable st, Node *scope);
 static uint connect_states(SymTable st, Node *ss_list);
 static void check_states_reachable_from_first(Node *ss);
 static Var *find_var(SymTable st, char *name, Node *scope);
-static uint assign_ef_bits(Node *scope);
 
-Program *analyse_program(Node *prog, Options options)
+Program *analyse_program(Node *prog, Options *options)
 {
 	Program *p = new(Program);
 	Node *ss;
@@ -69,9 +69,14 @@ Program *analyse_program(Node *prog, Options options)
 	else
 		p->param	= "";
 
+#ifdef DEBUG
+	report("\n**************program=%s**************\n", p->name);
+#endif
+
 	p->sym_table = sym_table_create();
 
 	p->chan_list = new(ChanList);
+	p->evflag_list = new(EvFlagList);
 	p->syncq_list = new(SyncQList);
 
 #ifdef DEBUG
@@ -88,9 +93,8 @@ Program *analyse_program(Node *prog, Options options)
 	p->num_ss = connect_states(p->sym_table, prog);
 	connect_variables(p->sym_table, prog);
 	connect_state_change_stmts(p->sym_table, prog);
-	foreach(ss, prog->prog_statesets)
+	foreach (ss, prog->prog_statesets)
 		check_states_reachable_from_first(ss);
-	p->num_event_flags = assign_ef_bits(p->prog);
 	return p;
 }
 
@@ -124,13 +128,16 @@ static void analyse_funcdef(Node *defn)
 	decl = defn->funcdef_decl;
 	assert(decl->tag == D_DECL);
 	var = decl->extra.e_decl;
+#if 0
+	decl->decl_init = defn->funcdef_block;
+#endif
 	if (var->type->tag != T_FUNCTION)
 	{
 		error_at_node(decl, "not a function type\n");
 		return;
 	}
 
-	foreach(p, var->type->val.function.param_decls)
+	foreach (p, var->type->val.function.param_decls)
 	{
 		/* check parameter has a name */
 		if (!p->extra.e_decl->name)
@@ -152,7 +159,7 @@ static void analyse_defns(Node *defn_list, Node *scope, Program *p)
 		case D_OPTION:
 			if (scope->tag == D_PROG)
 			{
-				analyse_option(&p->options, defn);
+				analyse_option(p->options, defn);
 			}
 			else if (scope->tag == D_STATE)
 			{
@@ -160,11 +167,11 @@ static void analyse_defns(Node *defn_list, Node *scope, Program *p)
 			}
 			break;
 		case D_DECL:
-			analyse_declaration(p->sym_table, p->chan_list, scope, defn);
+			analyse_declaration(p->sym_table, p->chan_list, p->evflag_list, scope, defn);
 			break;
 		case D_FUNCDEF:
 			analyse_funcdef(defn);
-			analyse_declaration(p->sym_table, p->chan_list, scope, defn->funcdef_decl);
+			analyse_declaration(p->sym_table, p->chan_list, p->evflag_list, scope, defn->funcdef_decl);
 			break;
 		case D_ENUMDEF:
 			/* TODO: analyse enum definition */
@@ -211,8 +218,8 @@ static int analyse_scope(Node *scope, Node *parent_scope, void *parg)
 	defn_list = defn_list_from_scope(scope);
 	var_list = var_list_from_scope(scope);
 
-	assert(var_list);					/* invariant, see expr() */
-	assert(!var_list->parent_scope);			/* invariant, see expr() */
+	assert(var_list);					/* invariant, see node() */
+	assert(!var_list->parent_scope);			/* invariant, see node() */
 
 	var_list->parent_scope = parent_scope;
 
@@ -378,29 +385,322 @@ static void fixup_struct_refs(SymTable st, Type *t)
 	}
 }
 
-static void analyse_pv_decl(ChanList *chan_list, Node *decl, Var *vp)
+void dump_channel_node(ChanNode *node, int level)
 {
-	if (vp->type->tag == T_PV)
+	uint n, num_nodes;
+
+	for (n = 0; n < level; n++) report("  ");
+	if (!node)
 	{
-		assign_single(chan_list, decl, vp, 0);
+		report("NOTHING\n");
+		return;
 	}
-	else if (vp->type->tag == T_ARRAY && vp->type->val.array.elem_type->tag == T_PV)
-		assign_multi(chan_list, decl, vp, 0);
-#if 0
-	assert(vp->decl);
-	if (vp->decl->init)
+	switch (node->type->tag)
 	{
-		error_at_node(decl, "pv type variables cannot be initialized\n");
-		vp->decl->init = expr(
+	case T_PV:
+		assert(node->val.chan);
+		report("CHANNEL '%s'\n", node->val.chan->name);
+		return;
+	case T_EVFLAG:
+		assert(node->val.evflag);
+		report("EVFLAG\n");
+		return;
+	case T_ARRAY:
+		report("ARRAY\n");
+		num_nodes = node->type->val.array.num_elems;
+		break;
+	case T_STRUCT:
+		report("STRUCT\n");
+		num_nodes = node->type->val.structure.num_members;
+		break;
+	default:
+		assert(impossible);
 	}
-#endif
+	assert(node->val.nodes);
+	for (n = 0; n < num_nodes; n++)
+	{
+		dump_channel_node(node->val.nodes[n], level+1);
+	}
 }
 
-static void analyse_declaration(SymTable st, ChanList *chan_list, Node *scope, Node *defn)
+static Node *mk_const_node(Node *other, uint n)
+{
+	static char buf[21];	/* long enough for a 64 bit unsigned in decimal */
+	Token k = other->token;
+
+	k.symbol = TOK_INTCON;
+	sprintf(buf, "%u", n);
+	k.str = strdup(buf);
+	return node(E_CONST, k);
+}
+
+static Node *mk_string_node(Node *other, char *s)
+{
+	Token k = other->token;
+	k.symbol = TOK_STRCON;
+	k.str = s;
+	return node(E_STRING, k);
+}
+
+static Node *mk_subscr_node(Node *operand, uint n)
+{
+	Token k = operand->token;
+
+	k.symbol = TOK_LBRACKET;
+	k.str = "[";
+	return node(E_SUBSCR, k, operand, mk_const_node(operand, n));
+}
+
+static Node *mk_member_node(Node *other, char *name)
+{
+	Token k = other->token;
+
+	k.symbol = TOK_NAME;
+	k.str = name;
+	return node(E_MEMBER, k);
+}
+
+static Node *mk_select_node(Node *operand, char *name)
+{
+	Token k = operand->token;
+
+	k.symbol = TOK_PERIOD;
+	k.str = ".";
+	return node(E_SELECT, k, operand, mk_member_node(operand, name));
+}
+
+static Node *mk_var_node(Var *vp)
+{
+	Token k;
+	Node *r;
+
+	assert(vp->decl);
+	k = vp->decl->token;
+	k.symbol = TOK_NAME;
+	k.str = vp->name;
+	r = node(E_VAR, k);
+	r->extra.e_var = vp;
+	return r;
+}
+
+/* Pretty printer for the kind of simple expressions that appear in assign
+   (or monitor, etc) clauses and pv initialisers. For error messages. */
+void report_expr(Node *xp)
+{
+	switch(xp->tag)
+	{
+	case E_VAR:
+	case E_MEMBER:
+	case E_CONST:
+		report("%s", xp->token.str);
+		return;
+	case E_SUBSCR:
+		report_expr(xp->subscr_operand);
+		report("["); report_expr(xp->subscr_index); report("]");
+		return;
+	case E_SELECT:
+		report_expr(xp->select_left);
+		report("%s", xp->token.str);
+		report_expr(xp->select_right);
+		return;
+	case E_STRING:
+		if (xp->token.str)
+			report("\"%s\"", xp->token.str);
+		return;
+	case E_INIT:
+		report("{");
+		foreach (xp, xp->init_elems)
+		{
+			report_expr(xp);
+			if (xp->next) report(",");
+		}
+		report("}");
+		return;
+	default:
+		report("internal compiler error (xp->tag==%s)\n", node_info[xp->tag].name);
+		assert(impossible);
+	}
+}
+
+/* Build the channel tree for a part of a variable. The part is denoted by
+   an expression 'vxp' that consists only of variables, subscripts (with
+   constant index), and member selection. */
+ChanNode *build_channel_tree(
+	ChanList *chan_list,		/* program wide channel list */
+	EvFlagList *evflag_list,	/* program wide event flag list */
+	ChanNode *cn,			/* an already existing channel node */
+	Type *type,			/* type of this part of the variable */
+	Node *vxp,			/* which part of the variable */
+	Node *ixp			/* pv init expression */
+)
+{
+	Node *member;
+	Node *sub_ixp = 0;
+	uint n;
+	char *pv_name;
+
+	assert(vxp);
+
+#ifdef DEBUG
+	report("build_channel_tree:\n  type=\n");
+	dump_type(type, 2);
+	report("  vxp=\n");
+	dump_expr(vxp, 2);
+	report("  ixp=\n");
+	dump_expr(ixp, 2);
+#endif
+
+	switch (type->tag)
+	{
+	case T_PV:
+		if (ixp)
+		{
+			if (ixp->tag == E_STRING)
+				pv_name = ixp->token.str;
+			else
+			{
+				error_at_node(ixp, "unexpected '%s' in pv init expression '",
+					ixp->token.str);
+				report_expr(ixp);
+				report("', expecting string (pv name)\n");
+				pv_name = 0;
+			}
+		}
+		else
+			pv_name = 0;
+		if (cn && cn->val.chan)
+		{
+			if (cn->val.chan->name && pv_name)
+			{
+				warning_at_node(vxp, "channel name changed from '%s' to '%s'\n",
+					cn->val.chan->name, pv_name);
+			}
+		}
+		if (!cn)
+		{
+			cn = new(ChanNode);
+			cn->type = type;
+		}
+		assert(cn->type == type);
+		if (!cn->val.chan)
+			cn->val.chan = new_channel(chan_list, type, vxp);
+		if (pv_name)
+			cn->val.chan->name = pv_name;
+		return cn;
+	case T_EVFLAG:
+		assert(!ixp);
+		if (!cn)
+		{
+			cn = new(ChanNode);
+			cn->type = type;
+		}
+		assert(cn->type == type);
+		if (!cn->val.chan)
+			cn->val.evflag = new_event_flag(evflag_list, vxp);
+		return cn;
+	case T_ARRAY:
+		if (ixp)
+		{
+			if (ixp->tag == E_INIT)
+			{
+				sub_ixp = ixp->init_elems;
+			}
+			else
+			{
+				error_at_node(ixp, "expecting aggregate initialiser for array\n");
+				ixp = 0;
+			}
+		}
+		assert(!ixp || ixp->tag == E_INIT);
+		for (n = 0; n < type->val.array.num_elems; n++)
+		{
+			Node *sup_vxp = mk_subscr_node(vxp, n);
+			ChanNode *sub_cn = build_channel_tree(chan_list, evflag_list,
+				cn ? cn->val.nodes[n] : 0, type->val.array.elem_type, sup_vxp, sub_ixp);
+			if (sub_cn)
+			{
+				if (!cn)
+				{
+					cn = new(ChanNode);
+					cn->type = type;
+					cn->val.nodes = newArray(ChanNode*, type->val.array.num_elems);
+				}
+				cn->val.nodes[n] = sub_cn;
+			}
+			if (sub_ixp)
+				sub_ixp = sub_ixp->next;
+			else if (ixp)
+				extra_warning_at_node(ixp, "defaulting missing initialisers to empty\n");
+		}
+		if (sub_ixp)
+			warning_at_node(sub_ixp, "discarding excess PV names in aggregate pv initialiser");
+		return cn;
+	case T_STRUCT:
+		if (ixp)
+		{
+			if (ixp->tag == E_INIT)
+				sub_ixp = ixp->init_elems;
+			else
+			{
+				error_at_node(ixp, "expecting aggregate initialiser for struct\n");
+				ixp = 0;
+			}
+		}
+		assert(!ixp || ixp->tag == E_INIT);
+		n = 0;
+		foreach (member, type->val.structure.member_decls)
+		{
+			if (member->tag == D_DECL)
+			{
+				Node *sup_vxp = mk_select_node(vxp, member->extra.e_decl->name);
+				ChanNode *sub_cn = build_channel_tree(chan_list, evflag_list,
+					cn ? cn->val.nodes[n] : 0, member->extra.e_decl->type, sup_vxp, sub_ixp);
+				if (sub_cn)
+				{
+					if (!cn)
+					{
+						cn = new(ChanNode);
+						cn->type = type;
+						cn->val.nodes = newArray(ChanNode*, type->val.structure.num_members);
+					}
+					cn->val.nodes[n] = sub_cn;
+				}
+				if (sub_ixp)
+					sub_ixp = sub_ixp->next;
+				else if (ixp)
+				{
+					extra_warning_at_node(ixp,
+						"defaulting missing pv struct initialisers "
+						"to 'not assigned'\n");
+					ixp = 0;
+				}
+				n++;
+			}
+			/* note: we completely skip over non-DECL members */
+		}
+		if (sub_ixp)
+			warning_at_node(sub_ixp, "discarding excess pv initialisers in aggregate\n");
+		return cn;
+	default:
+		if (!ixp)
+			return 0;
+		warning_at_node(ixp, "ignoring pv initialiser at non-pv type\n");
+		return 0;
+	}
+}
+
+static void analyse_declaration(
+	SymTable st,
+	ChanList *chan_list,
+	EvFlagList *evflag_list,
+	Node *scope,
+	Node *defn)
 {
 	Var *vp;
-        VarList *var_list;
+	VarList *var_list;
 	static uint seen_foreign = FALSE;
+	ChanNode *chan = 0;
+	Node *pv_init = 0;
 
 	assert(scope);			/* precondition */
 	assert(defn);			/* precondition */
@@ -412,6 +712,9 @@ static void analyse_declaration(SymTable st, ChanList *chan_list, Node *scope, N
 #ifdef DEBUG
 	report("declaration: %s\n", vp->name);
 #endif
+
+	/* enforce some restrictions */
+
 	if (vp->type->tag == T_NONE && !seen_foreign)
 	{
 		warning_at_node(defn,
@@ -421,23 +724,18 @@ static void analyse_declaration(SymTable st, ChanList *chan_list, Node *scope, N
 	if (vp->type->tag == T_NONE && scope->tag != D_PROG)
 		error_at_node(defn,
 			"foreign objects can only be declared at the top-level\n");
+
 	if (vp->type->tag == T_FUNCTION && scope->tag != D_PROG)
 		error_at_node(defn,
 			"functions can only be declared at the top-level\n");
-	if (vp->type->tag == T_EVFLAG)
-	{
-		if (scope->tag != D_PROG && scope->tag != D_FUNCDEF)
-			error_at_node(defn,
-				"event flags can only be declared at the top-level"
-				"or as function parameter\n");
-		vp->chan.evflag = new(EvFlag);
-	}
+
 	if (vp->type->tag == T_PV && vp->type->val.pv.value_type->tag == T_VOID)
 	{
 		if (scope->tag != D_FUNCDEF)
 			error_at_node(defn,
 				"void pv can only be declared as function parameter\n");
 	}
+
 #ifdef DEBUG
 	report("name=%s, before fixup:\n", vp->name);
 	dump_type(vp->type, 0);
@@ -468,523 +766,369 @@ static void analyse_declaration(SymTable st, ChanList *chan_list, Node *scope, N
 	{
 		add_var_to_scope(vp, scope);
 	}
-	if (scope->tag == D_FUNCDEF)
+
+	if (defn->decl_init && defn->decl_init->tag == E_PRE && defn->decl_init->token.symbol == TOK_PV)
 	{
-#if 0
-		if (vp->type->is_pv && vp->type->tag != T_POINTER)
-			error_at_node(defn,
-				"type of '%s' not allowed for function parameter\n",
-				vp->name);
+		if (scope->tag == D_PROG || scope->tag == D_SS || scope->tag == D_STATE)
+			pv_init = defn->decl_init->pre_operand;
+		else
+			error_at_node(defn->decl_init, "pv initialiser not allowed here\n");
+		defn->decl_init = 0;
+	}
+
+	assert(!vp->chan);
+	if (scope->tag != D_FUNCDEF)
+	{
+		chan = build_channel_tree(chan_list, evflag_list, 0, vp->type, mk_var_node(vp), pv_init);
+		assert(!vp->chan || vp->chan->type==vp->type);
+#ifdef DEBUG
+		report("analyse_declaration(): channel_node=\n");
+		dump_channel_node(chan, 1);
 #endif
 	}
-	else
+
+	if (scope->tag == D_PROG || scope->tag == D_SS || scope->tag == D_STATE || scope->tag == D_FUNCDEF)
+		vp->chan = chan;
+	else if (chan)
+		error_at_node(defn, "declaring channels or event flags is not allowed here\n");
+}
+
+uint eval_subscript(Node *expr, uint num_elems, uint *pindex)
+{
+	assert(expr->tag == E_CONST);
+	if (expr->extra.e_const)
 	{
-		analyse_pv_decl(chan_list, defn, vp);
+		*pindex = *expr->extra.e_const;
+		return TRUE;
 	}
+	if (!strtoui(expr->token.str, num_elems, pindex))
+	{
+		error_at_node(expr, "subscript '[%s]' out of range\n", expr->token.str);
+		return FALSE;
+	}
+	expr->extra.e_const = new(uint);
+	*expr->extra.e_const = *pindex;
+	return TRUE;
+}
+
+static ChanNode *traverse_var_expr(SymTable st, Node *scope, Node *vxp, const char *what)
+{
+	Type *t;
+	Var *vp;
+	ChanNode *chan_node;
+	uint index;
+	Node *member;
+	char *var_name;
+
+	switch (vxp->tag)
+	{
+	case E_VAR:
+		var_name = vxp->token.str;
+		vp = find_var(st, var_name, scope);
+		if (!vp)
+		{
+			error_at_node(vxp,
+				"cannot %s variable '%s': not declared\n", what, var_name);
+			return 0;
+		}
+		vxp->extra.e_var = vp;
+		if (vp->scope != scope)
+		{
+			error_at_node(vxp, "cannot %s variable '%s': "
+				"%s must be in the same scope as declaration\n", what, var_name, what);
+			return 0;
+		}
+		if (!vp->chan)
+		{
+			error_at_node(vxp, "cannot %s variable '%s': type does not contain pv marker\n",
+				what, vp->name);
+		}
+#ifdef DEBUG
+		report("traverse_var_expr: E_VAR\n");
+		dump_channel_node(vp->chan, 1);
+#endif
+		return vp->chan;
+	case E_SUBSCR:
+		chan_node = traverse_var_expr(st, scope, vxp->subscr_operand, what);
+		if (!chan_node)
+			return 0;
+#ifdef DEBUG
+		report("traverse_var_expr: E_SUBSCR\n");
+		dump_channel_node(chan_node, 1);
+#endif
+		t = chan_node->type;
+		if (t->tag == T_PV)
+		{
+			error_at_node(vxp, "type error: cannot %s an array element of a single channel\n", what);
+			return 0;
+		}
+		if (t->tag != T_ARRAY)
+		{
+			error_at_node(vxp, "type error in subscript: expression '");
+			report_expr(vxp->subscr_operand);
+			report("' is not an array\n");
+			dump_type(t, 0);
+			return 0;
+		}
+		if (!eval_subscript(vxp->subscr_index, t->val.array.num_elems, &index))
+			return 0;
+		return chan_node->val.nodes[index];
+	case E_SELECT:
+		chan_node = traverse_var_expr(st, scope, vxp->select_left, what);
+		if (!chan_node)
+			return 0;
+		t = chan_node->type;
+#ifdef DEBUG
+		report("traverse_var_expr: E_SELECT\n");
+		dump_channel_node(chan_node, 1);
+#endif
+		assert(t->tag != T_PV);
+		if (t->tag != T_STRUCT)
+		{
+			error_at_node(vxp, "type error in member selection: expression '");
+			report_expr(vxp->select_left);
+			report("' is not a struct\n");
+			return 0;
+		}
+		assert(vxp->select_right->tag == E_MEMBER);
+		index = 0;
+		foreach (member, t->val.structure.member_decls)
+		{
+			if (strcmp(member->token.str, vxp->select_right->token.str) == 0)
+				break;
+			index++;
+		}
+		if (!member)
+		{
+			error_at_node(vxp, "'struct %s' has no member '%s'\n",
+				t->val.structure.name,
+				vxp->select_right->token.str);
+			return 0;
+		}
+		return chan_node->val.nodes[index];
+	default:
+		assert(impossible);
+	}
+}
+
+/* Find the variable node in a var_expr. Excerpt from the grammar:
+var_expr(r) ::= variable(v).					{ r = node(E_VAR, v); }
+var_expr(r) ::= var_expr(x) LBRACKET(t) INTCON(y) RBRACKET.	{ r = node(E_SUBSCR, t, x, node(E_CONST, y)); }
+var_expr(r) ::= var_expr(x) PERIOD(t) member(y).		{ r = node(E_SELECT, t, x, y); }
+*/
+static Node *find_var_node(Node *xp)
+{
+	switch (xp->tag)
+	{
+	case E_VAR:
+		return xp;
+	case E_SUBSCR:
+		return find_var_node(xp->subscr_operand);
+	case E_SELECT:
+		return find_var_node(xp->select_left);
+	default:
+		assert(impossible);
+	}
+}
+
+static void assign_error(Node *vxp, Node *ixp, const char *reason)
+{
+	error_at_node(ixp, "cannot assign expression: '");
+	report_expr(vxp);
+	report("' to '");
+	report_expr(ixp);
+	report("': %s\n", reason);
 }
 
 static void analyse_assign(SymTable st, ChanList *chan_list, Node *scope, Node *defn)
 {
-	char *name;
+	Node *var_node, *vxp, *ixp;
 	Var *vp;
+	ChanNode *chan_node;
 
 	assert(chan_list);		/* precondition */
 	assert(scope);			/* precondition */
 	assert(defn);			/* precondition */
 	assert(defn->tag == D_ASSIGN);	/* precondition */
 
-	name = defn->token.str;
-	vp = find_var(st, name, scope);
+	vxp = defn->assign_expr;
+	if (!defn->assign_pvs)
+		defn->assign_pvs = mk_string_node(defn, "");
+	ixp = defn->assign_pvs;
 
-	if (!vp)
-	{
-		error_at_node(defn, "cannot assign variable '%s': "
-			"variable was not declared\n", name);
-		return;
-	}
-	assert(vp->type);		/* invariant */
-	if (!type_assignable(vp->type))
-	{
-		error_at_node(defn, "cannot assign variable '%s': wrong type\n", name);
-		return;
-	}
+	var_node = find_var_node(vxp);
+	assert(var_node);		/* syntax + postcondition */
+	connect_variable(var_node, scope, &st);
+	vp = var_node->extra.e_var;
+	assert(vp);			/* invariant */
+
+#ifdef DEBUG
+	report("assign ");
+        report_expr(vxp);
+	report(" to ");
+        report_expr(ixp);
+	report(";\n");
+#endif
+
 	if (vp->scope != scope)
 	{
-		error_at_node(defn, "cannot assign variable '%s': "
-			"assign must be in the same scope as declaration\n", name);
-		return;
+		assign_error(vxp, ixp, "assign must be in the same scope as declaration");
 	}
-	if (scope->tag == D_STATE)
+	if (!vp->chan)
 	{
-		warning_at_node(defn, "state local assign is deprecated\n");
+		if (type_is_valid_pv_child(vp->type) ||
+			(vp->type->tag == T_ARRAY && type_is_valid_pv_child(vp->type->val.array.elem_type)))
+		{
+			/* compatibility work-around for old programs; we only support the two
+			   special cases which were allowed in earlier versions */
+			extra_warning_at_node(defn, "assign adds missing pv qualifier to type of expression [deprecated]\n");
+			if (ixp->tag == E_INIT)
+			{
+				if (vp->type->tag != T_ARRAY)
+				{
+					assign_error(vxp, ixp, "variable is not an array");
+					return;
+				}
+				if (!type_is_valid_pv_child(vp->type->val.array.elem_type))
+				{
+					assign_error(vxp, ixp, "array element type is not a valid channel type");
+					return;
+				}
+				vp->type->val.array.elem_type = mk_pv_type(vp->type->val.array.elem_type);
+			}
+			else
+			{
+				assert(ixp->tag == E_STRING);	/* syntax */
+				if (!type_is_valid_pv_child(vp->type))
+				{
+					assign_error(vxp, ixp, "variable type is not a valid channel type");
+					return;
+				}
+				vp->type = mk_pv_type(vp->type);
+			}
+			assert(!vp->chan);
+			vp->chan = build_channel_tree(chan_list, 0, 0, vp->type, var_node, 0);
+		}
+		else
+		{
+			assign_error(vxp, ixp, "the expression's type contains no pv qualifier\n");
+			return;
+		}
 	}
-	if (defn->assign_subscr)
-	{
-		assign_subscript(chan_list, defn, vp, defn->assign_subscr, defn->assign_pvs);
-	}
-	else if (!defn->assign_pvs)
-	{
-		assign_single(chan_list, defn, vp, 0);
-	}
-	else if (defn->assign_pvs->tag == E_INIT)
-	{
-		assign_multi(chan_list, defn, vp, defn->assign_pvs->init_elems);
-	}
-	else
-	{
-		assign_single(chan_list, defn, vp, defn->assign_pvs);
-	}
+	assert(vp->chan);
+
 #ifdef DEBUG
-	report("analyse_assign: final type of '%s' is\n", vp->name);
+        report("analyse_assign: before traverse_var_expr\n");
+	assert(vp->chan->type == vp->type);
 	dump_type(vp->type, 1);
+	dump_channel_node(vp->chan, 1);
 #endif
+
+	chan_node = traverse_var_expr(st, scope, vxp, "assign");
+	if (!chan_node)
+		return;
+	*chan_node = *build_channel_tree(chan_list, 0, chan_node, chan_node->type, vxp, ixp);
+	assert(vp->chan->type == vp->type);
 }
 
-/* Assign a (whole) variable to a channel.
- * Format: assign <variable> to <string>;
- */
-static void assign_single(
-	ChanList	*chan_list,
-	Node		*defn,
-	Var		*vp,
-	Node		*pv_name
+uint traverse_channel_tree(
+	ChanNode	*node,		/* start node */
+	channel_action	*chan_iter,	/* function to call for each channel */
+	evflag_action	*evflag_iter,	/* function to call for each event flag */
+	void		*env		/* environment, passed to iteratees */
 )
 {
-	char *name = pv_name ? pv_name->token.str : "";
+	uint num_nodes, n;
 
-	assert(chan_list);
-	assert(defn);
-	assert(vp);
-
-#ifdef DEBUG
-	report("assign %s to %s;\n", vp->name, name);
-#endif
-
-	if (vp->type->tag != T_PV)
+	if (!node)
+		return FALSE;
+	switch (node->type->tag)
 	{
-		extra_warning_at_node(defn,
-			"assign adds missing pv qualifier to type of '%s' [deprecated]\n",
-			vp->name);
-		vp->type = mk_pv_type(vp->type);
+	case T_PV:
+		assert(node->val.chan);
+		if (chan_iter)
+			return chan_iter(node->val.chan, env);
+		else
+			return FALSE;
+	case T_EVFLAG:
+		assert(node->val.evflag);
+		if (evflag_iter)
+			return evflag_iter(node->val.evflag, env);
+		else
+			return FALSE;
+	case T_ARRAY:
+		num_nodes = node->type->val.array.num_elems;
+		break;
+	case T_STRUCT:
+		num_nodes = node->type->val.structure.num_members;
+		break;
+	default:
+		return FALSE;
 	}
-
-	if (vp->assign != M_NONE)
+	assert(node->val.nodes);
+	for (n = 0; n < num_nodes; n++)
 	{
-		error_at_node(defn, "variable '%s' already assigned\n", vp->name);
-		return;
+		uint res = traverse_channel_tree(node->val.nodes[n], chan_iter, evflag_iter, env);
+		if (res)
+			return res;
 	}
-	vp->assign = M_SINGLE;
-	vp->chan.single = new_channel(
-		chan_list, vp, type_array_length1(vp->type) * type_array_length2(vp->type), 0);
-	vp->chan.single->name = name;
+	return FALSE;
 }
 
-static void assign_elem(
-	ChanList	*chan_list,
-	Node		*defn,
-	Var		*vp,
-	uint		n_subscr,
-	char		*pv_name
-)
+static uint monitor_iteratee(Chan *chan, void *env)
 {
-	Type *pv_type;
-
-	assert(chan_list);				/* precondition */
-	assert(defn);					/* precondition */
-	assert(vp);					/* precondition */
-	assert(n_subscr < type_array_length1(vp->type));/* precondition */
-	assert(vp->assign != M_SINGLE);			/* precondition */
-
-	assert(vp->type->tag == T_ARRAY);
-	pv_type = vp->type->val.array.elem_type;
-	if (pv_type->tag != T_PV)
-	{
-		extra_warning_at_node(defn,
-			"assign adds missing pv qualifier to type of '%s' [deprecated]\n",
-			vp->name);
-		vp->type = mk_array_type(mk_pv_type(pv_type),vp->type->val.array.num_elems);
-	}
-
-	if (vp->assign == M_NONE)
-	{
-		uint n;
-
-		vp->assign = M_MULTI;
-		vp->chan.multi = newArray(Chan*, type_array_length1(vp->type));
-		for (n = 0; n < type_array_length1(vp->type); n++)
-		{
-			vp->chan.multi[n] = new_channel(
-				chan_list, vp, type_array_length2(vp->type), n);
-		}
-	}
-	assert(vp->assign == M_MULTI);
-	if (vp->chan.multi[n_subscr]->name)
-	{
-		error_at_node(defn, "array element '%s[%d]' already assigned to '%s'\n",
-			vp->name, n_subscr, vp->chan.multi[n_subscr]->name);
-		return;
-	}
-	vp->chan.multi[n_subscr]->name = pv_name;
-}
-
-/* Assign an array element to a channel.
- * Format: assign <variable>[<subscr>] to <string>; */
-static void assign_subscript(
-	ChanList	*chan_list,
-	Node		*defn,
-	Var		*vp,
-	Node		*subscr,
-	Node		*pv_name
-)
-{
-	uint n_subscr;
-
-	assert(chan_list);			/* precondition */
-	assert(defn);				/* precondition */
-	assert(vp);				/* precondition */
-	assert(subscr);				/* precondition */
-	assert(subscr->tag == E_CONST);	/* syntax */
-	assert(pv_name);			/* precondition */
-
-#ifdef DEBUG
-	report("assign %s[%s] to '%s';\n", vp->name, subscr->token.str, pv_name);
-#endif
-
-	if (vp->type->tag != T_ARRAY)	/* establish L3 */
-	{
-		error_at_node(defn, "variable '%s' is not an array\n", vp->name);
-		return;
-	}
-	if (vp->assign == M_SINGLE)
-	{
-		error_at_node(defn, "variable '%s' already assigned\n", vp->name);
-		return;
-	}
-	if (!strtoui(subscr->token.str, type_array_length1(vp->type), &n_subscr))
-	{
-		error_at_node(subscr, "subscript in '%s[%s]' out of range\n",
-			vp->name, subscr->token.str);
-		return;
-	}
-	assign_elem(chan_list, defn, vp, n_subscr, pv_name->token.str);
-}
-
-/* Assign an array variable to multiple channels.
- * Format: assign <variable> to { <string>, <string>, ... };
- */
-static void assign_multi(
-	ChanList	*chan_list,
-	Node		*defn,
-	Var		*vp,
-	Node		*pv_name_list
-)
-{
-	Node	*pv_name;
-	uint	n_subscr = 0;
-
-	assert(chan_list);
-	assert(defn);
-	assert(vp);
-
-#ifdef DEBUG
-	report("assign %s to {", vp->name);
-#endif
-
-	if (vp->type->tag != T_ARRAY)	/* establish L3 */
-	{
-		error_at_node(defn, "variable '%s' is not an array\n", vp->name);
-		return;
-	}
-	if (vp->assign == M_SINGLE)
-	{
-		error_at_node(defn, "assign: variable '%s' already assigned\n", vp->name);
-		return;
-	}
-	foreach (pv_name, pv_name_list)
-	{
-#ifdef DEBUG
-		report("'%s'%s", pv_name->token.str, pv_name->next ? ", " : "};\n");
-#endif
-		if (n_subscr >= type_array_length1(vp->type))
-		{
-			warning_at_node(pv_name, "discarding excess PV names "
-				"in multiple assign to variable '%s'\n", vp->name);
-			break;
-		}
-		assign_elem(chan_list, defn, vp, n_subscr++, pv_name->token.str);
-	}
-	/* for the remaining array elements, assign to "" */
-	while (n_subscr < type_array_length1(vp->type))
-	{
-		assign_elem(chan_list, defn, vp, n_subscr++, "");
-	}
-}
-
-static void monitor_var(Node *defn, Var *vp)
-{
-	assert(defn);
-	assert(vp);
-
-#ifdef DEBUG
-	report("monitor %s;", vp->name);
-#endif
-
-	if (vp->assign == M_NONE)		/* establish L2a */
-	{
-		error_at_node(defn, "cannot monitor variable '%s': not assigned\n", vp->name);
-		return;
-	}
-	if (vp->monitor == M_SINGLE)
-	{
-		warning_at_node(defn,
-			"variable '%s' already monitored\n", vp->name);
-		return;				/* nothing to do */
-	}
-	vp->monitor = M_SINGLE;			/* strengthen if M_MULTI */
-	if (vp->assign == M_SINGLE)
-	{
-		vp->chan.single->monitor = TRUE;
-	}
-	else
-	{
-		uint n;
-		assert(vp->assign == M_MULTI);	/* by L2a and else */
-		for (n = 0; n < type_array_length1(vp->type); n++)
-		{
-			vp->chan.multi[n]->monitor = TRUE;
-		}
-	}
-}
-
-static void monitor_elem(Node *defn, Var *vp, Node *subscr)
-{
-	uint	n_subscr;
-
-	assert(defn);
-	assert(vp);
-	assert(subscr);
-	assert(subscr->tag == E_CONST);		/* syntax */
-
-#ifdef DEBUG
-	report("monitor %s[%s];\n", vp->name, subscr->token.str);
-#endif
-
-	if (vp->type->tag != T_ARRAY)	/* establish L3 */
-	{
-		error_at_node(defn, "variable '%s' is not an array\n", vp->name);
-		return;
-	}
-	if (!strtoui(subscr->token.str, type_array_length1(vp->type), &n_subscr))
-	{
-		error_at_node(subscr, "subscript in '%s[%s]' out of range\n",
-			vp->name, subscr->token.str);
-		return;
-	}
-	if (vp->assign == M_NONE)	/* establish L2a */
-	{
-		error_at_node(defn, "array element '%s[%d]' not assigned\n",
-			vp->name, n_subscr);
-		return;
-	}
-	if (vp->monitor == M_SINGLE)
-	{
-		warning_at_node(defn, "array element '%s[%d]' already monitored\n",
-			vp->name, n_subscr);
-		return;		/* nothing to do */
-	}
-	if (vp->assign == M_SINGLE)	/* establish L1a */
-	{
-		error_at_node(defn, "variable '%s' is assigned to a single channel "
-			"and can only be monitored wholesale\n", vp->name);
-		return;
-	}
-	assert(vp->assign == M_MULTI);	/* by L1a and L2a */
-	if (!vp->chan.multi[n_subscr]->name)
-	{
-		error_at_node(defn, "array element '%s[%d]' not assigned\n",
-			vp->name, n_subscr);
-		return;
-	}
-	if (vp->chan.multi[n_subscr]->monitor)
-	{
-		warning_at_node(defn, "'%s[%d]' already monitored\n",
-			vp->name, n_subscr);
-		return;					/* nothing to do */
-	}
-	vp->chan.multi[n_subscr]->monitor = TRUE;	/* do it */
+	if (chan->monitor)
+		return TRUE;
+	chan->monitor = TRUE;
+	return FALSE;
 }
 
 static void analyse_monitor(SymTable st, Node *scope, Node *defn)
 {
-	Var	*vp;
-	char	*var_name;
+	ChanNode *chan_node;
 
 	assert(scope);
 	assert(defn);
 	assert(defn->tag == D_MONITOR);
 
-	var_name = defn->token.str;
-	assert(var_name);
+#ifdef DEBUG
+	report("monitor ");
+        report_expr(defn->monitor_expr);
+	report(";\n");
+#endif
 
-	vp = find_var(st, var_name, scope);
-	if (!vp)
-	{
-		error_at_node(defn,
-			"cannot monitor variable '%s': not declared\n", var_name);
+	chan_node = traverse_var_expr(st, scope, defn->monitor_expr, "monitor");
+	if (!chan_node)
 		return;
-	}
-	if (vp->scope != scope)
+	if (traverse_channel_tree(chan_node, monitor_iteratee, 0, 0))
 	{
-		error_at_node(defn, "cannot monitor variable '%s': "
-			"monitor must be in the same scope as declaration\n", var_name);
-		return;
-	}
-	if (scope->tag == D_STATE)
-	{
-		warning_at_node(defn, "state local monitor is deprecated\n");
-	}
-	if (defn->monitor_subscr)
-	{
-		monitor_elem(defn, vp, defn->monitor_subscr);
-	}
-	else
-	{
-		monitor_var(defn, vp);
+		warning_at_node(defn, "expression or parts of it are already monitored\n");
 	}
 }
 
-static void sync_var(Node *defn, Var *vp, Var *evp)
+static uint sync_iteratee(Chan *chan, void *env)
 {
-	assert(defn);
-	assert(vp);
-	assert(evp);
-	assert(vp->sync != M_SINGLE);			/* call */
-
-#ifdef DEBUG
-	report("sync %s to %s;\n", vp->name, evp->name);
-#endif
-
-	if (vp->sync == M_MULTI)
-	{
-		error_at_node(defn, "some array elements of '%s' already sync'd\n",
-			vp->name);
-		return;
-	}
-	if (vp->assign == M_NONE)		/* establish L2b */
-	{
-		error_at_node(defn, "variable '%s' not assigned\n", vp->name);
-		return;
-	}
-	vp->sync = M_SINGLE;
-	if (vp->assign == M_SINGLE)
-	{
-		assert(vp->chan.single);
-		assert(vp->sync != M_MULTI);	/* by L1b */
-		vp->chan.single->sync = evp;
-		vp->sync = M_SINGLE;
-	}
-	else
-	{
-		uint n;
-		assert(vp->assign == M_MULTI);	/* else */
-		vp->sync = M_SINGLE;
-		for (n = 0; n < type_array_length1(vp->type); n++)
-		{
-			assert(!vp->chan.multi[n]->sync);
-			vp->chan.multi[n]->sync = evp;
-		}
-	}
-}
-
-static void sync_elem(Node *defn, Var *vp, Node *subscr, Var *evp)
-{
-	uint	n_subscr;
-
-	assert(defn);					/* syntax */
-	assert(vp);					/* call */
-	assert(subscr);					/* call */
-	assert(subscr->tag == E_CONST);		/* syntax */
-	assert(evp);					/* syntax */
-
-	assert(vp->sync != M_SINGLE);			/* call */
-
-#ifdef DEBUG
-	report("sync %s[%d] to %s;\n", vp->name, subscr->token.str, evp->name);
-#endif
-
-	if (vp->type->tag != T_ARRAY)	/* establish L3 */
-	{
-		error_at_node(defn, "variable '%s' is not an array\n", vp->name);
-		return;
-	}
-	if (!strtoui(subscr->token.str, type_array_length1(vp->type), &n_subscr))
-	{
-		error_at_node(subscr, "subscript in '%s[%s]' out of range\n",
-			vp->name, subscr->token.str);
-		return;
-	}
-	/* establish L1b */
-	if (vp->assign == M_SINGLE)
-	{
-		error_at_node(defn, "variable '%s' is assigned to a single channel "
-			"and can only be sync'd wholesale\n", vp->name);
-		return;
-	}
-	if (vp->assign == M_NONE || !vp->chan.multi[n_subscr]->name)
-	{
-		error_at_node(defn, "array element '%s[%d]' not assigned\n",
-			vp->name, n_subscr);
-		return;
-	}
-	assert(vp->assign == M_MULTI);	/* L1b */
-	if (vp->chan.multi[n_subscr]->sync)
-	{
-		warning_at_node(defn, "'%s[%d]' already sync'd\n",
-			vp->name, n_subscr);
-		return;					/* nothing to do */
-	}
-	vp->sync = M_MULTI;
-	vp->chan.multi[n_subscr]->sync = evp;		/* do it */
+	Var *ef = (Var *)env;
+	if (chan->sync)
+		return TRUE;
+	chan->sync = ef;
+	return FALSE;
 }
 
 static void analyse_sync(SymTable st, Node *scope, Node *defn)
 {
-	char	*var_name, *ef_name;
-	Var	*vp, *evp;
+	char		*ef_name;
+	Var		*evp;
+	ChanNode	*chan_node;
 
 	assert(scope);
 	assert(defn);
 	assert(defn->tag == D_SYNC);
 
-	var_name = defn->token.str;
-	assert(var_name);
-
 	assert(defn->sync_evflag);
 	ef_name = defn->sync_evflag->token.str;
 	assert(ef_name);
 
-	vp = find_var(st, var_name, scope);
-	if (!vp)
-	{
-		error_at_node(defn, "variable '%s' not declared\n", var_name);
-		return;
-	}
-	if (vp->scope != scope)
-	{
-		error_at_node(defn, "cannot sync variable '%s' to event flag '%s': "
-			"sync must be in the same scope as (variable) declaration\n",
-			var_name, ef_name);
-		return;
-	}
-	if (scope->tag == D_STATE)
-	{
-		warning_at_node(defn, "state local sync is deprecated\n");
-	}
-	if (vp->sync == M_SINGLE)
-	{
-		error_at_node(defn, "variable '%s' already sync'd\n", vp->name);
-		return;
-	}
 	evp = find_var(st, ef_name, scope);
 	if (!evp)
 	{
@@ -996,138 +1140,43 @@ static void analyse_sync(SymTable st, Node *scope, Node *defn)
 		error_at_node(defn, "variable '%s' is not an event flag\n", ef_name);
 		return;
 	}
-	if (defn->sync_subscr)
+
+#ifdef DEBUG
+	report("sync ");
+        report_expr(defn->sync_expr);
+	report(";\n");
+#endif
+
+	chan_node = traverse_var_expr(st, scope, defn->sync_expr, "sync");
+	if (!chan_node)
+		return;
+	if (traverse_channel_tree(chan_node, sync_iteratee, 0, evp))
 	{
-		sync_elem(defn, vp, defn->sync_subscr, evp);
-	}
-	else
-	{
-		sync_var(defn, vp, evp);
+		error_at_node(defn, "expression or parts of it are already synced\n");
 	}
 }
 
-static void syncq_var(Node *defn, Var *vp, SyncQ *qp)
+static uint syncq_iteratee(Chan *chan, void *env)
 {
-	assert(defn);
-	assert(vp);
-	assert(qp);				/* call */
-	assert(vp->syncq != M_SINGLE);		/* call */
+	SyncQ *qp = (SyncQ *)env;
 
-	if (vp->syncq == M_MULTI)
-	{
-		error_at_node(defn, "some array elements of '%s' already syncq'd\n",
-			vp->name);
-		return;
-	}
-	if (vp->assign == M_NONE)		/* establish L2c */
-	{
-		error_at_node(defn, "variable '%s' not assigned\n", vp->name);
-		return;
-	}
-	vp->syncq = M_SINGLE;
-	if (vp->assign == M_SINGLE)
-	{
-		assert(vp->chan.single);	/* invariant */
-		assert(vp->syncq != M_MULTI);	/* by L1c */
-		vp->chan.single->syncq = qp;
-		vp->syncq = M_SINGLE;
-	}
-	else
-	{
-		uint n;
-		assert(vp->assign == M_MULTI);	/* else */
-		vp->syncq = M_SINGLE;
-		for (n = 0; n < type_array_length1(vp->type); n++)
-		{
-			assert(!vp->chan.multi[n]->syncq);
-			vp->chan.multi[n]->syncq = qp;
-		}
-	}
-}
-
-static void syncq_elem(Node *defn, Var *vp, Node *subscr, SyncQ *qp)
-{
-	uint	n_subscr;
-
-	assert(defn);					/* syntax */
-	assert(vp);					/* call */
-	assert(subscr);					/* call */
-	assert(subscr->tag == E_CONST);		/* syntax */
-	assert(qp);					/* call */
-
-	assert(vp->syncq != M_SINGLE);			/* call */
-
-	if (vp->type->tag != T_ARRAY)	/* establish L3 */
-	{
-		error_at_node(defn, "variable '%s' is not an array\n", vp->name);
-		return;
-	}
-	if (!strtoui(subscr->token.str, type_array_length1(vp->type), &n_subscr))
-	{
-		error_at_node(subscr, "subscript in '%s[%s]' out of range\n",
-			vp->name, subscr->token.str);
-		return;
-	}
-	/* establish L1c */
-	if (vp->assign == M_SINGLE)
-	{
-		error_at_node(defn, "variable '%s' is assigned to a single channel "
-			"and can only be syncq'd wholesale\n", vp->name);
-		return;
-	}
-	if (vp->assign == M_NONE || !vp->chan.multi[n_subscr]->name)
-	{
-		error_at_node(defn, "array element '%s[%d]' not assigned\n",
-			vp->name, n_subscr);
-		return;
-	}
-	assert(vp->assign == M_MULTI);			/* L1c */
-	if (vp->chan.multi[n_subscr]->syncq)
-	{
-		warning_at_node(defn, "'%s[%d]' already syncq'd\n",
-			vp->name, n_subscr);
-		return;					/* nothing to do */
-	}
-	vp->syncq = M_MULTI;
-	vp->chan.multi[n_subscr]->syncq = qp;		/* do it */
+	if (chan->syncq)
+		return TRUE;
+	chan->syncq = qp;
+	return FALSE;
 }
 
 static void analyse_syncq(SymTable st, SyncQList *syncq_list, Node *scope, Node *defn)
 {
-	char	*var_name;
-	Var	*vp, *evp = 0;
-	SyncQ	*qp;
-	uint	n_size = 0;
+	Var		*evp = 0;
+	SyncQ		*qp;
+	uint		n_size = 0;
+	ChanNode	*chan_node;
 
 	assert(scope);
 	assert(defn);
 	assert(defn->tag == D_SYNCQ);
 
-	var_name = defn->token.str;
-	assert(var_name);
-
-	vp = find_var(st, var_name, scope);
-	if (!vp)
-	{
-		error_at_node(defn, "variable '%s' not declared\n", var_name);
-		return;
-	}
-	if (vp->scope != scope)
-	{
-		error_at_node(defn, "cannot syncq variable '%s': "
-			"syncq must be in the same scope as declaration\n",
-			var_name);
-		return;
-	}
-	if (scope->tag == D_STATE)
-	{
-		warning_at_node(defn, "state local syncq is deprecated\n");
-	}
-	if (vp->syncq == M_SINGLE)
-	{
-		error_at_node(defn, "variable '%s' already syncq'd\n", vp->name);
-		return;
-	}
 	if (!defn->syncq_size)
 	{
 		warning_at_node(defn, "leaving out the queue size is deprecated"
@@ -1155,43 +1204,39 @@ static void analyse_syncq(SymTable st, SyncQList *syncq_list, Node *scope, Node 
 			error_at_node(defn, "variable '%s' is not an event flag\n", ef_name);
 			return;
 		}
-		if (evp->chan.evflag->queued)
-		{
-			error_at_node(defn, "event flag '%s' is already used for another syncq\n",
-				ef_name);
-			return;
-		}
-		evp->chan.evflag->queued = TRUE;
 	}
 	qp = new_sync_queue(syncq_list, n_size);
-	if (defn->syncq_subscr)
-	{
-		if (evp)
-			sync_elem(defn, vp, defn->sync_subscr, evp);
-		syncq_elem(defn, vp, defn->syncq_subscr, qp);
-	}
-	else
-	{
-		if (evp)
-			sync_var(defn, vp, evp);
-		syncq_var(defn, vp, qp);
-	}
+
+#ifdef DEBUG
+	report("syncq ");
+        report_expr(defn->syncq_expr);
+	report(";\n");
+#endif
+
+	chan_node = traverse_var_expr(st, scope, defn->syncq_expr, "syncq");
+	if (!chan_node)
+		return;
+
+	if (evp)
+		if (traverse_channel_tree(chan_node, sync_iteratee, 0, evp))
+			error_at_node(defn, "expression or parts of it are already synced\n");
+
+	if (traverse_channel_tree(chan_node, syncq_iteratee, 0, qp))
+		error_at_node(defn, "expression or parts of it are already syncqed\n");
 }
 
 /* Allocate a channel structure for this variable, add it to the channel list,
-   and initialize members index, var, and count. Also increase channel
+   and initialise members var, and count. Also increase channel
    count in the list. */
-static Chan *new_channel(ChanList *chan_list, Var *vp, uint count, uint index)
+static Chan *new_channel(ChanList *chan_list, Type *type, Node *expr)
 {
 	Chan *cp = new(Chan);
 
-	cp->var = vp;
-	cp->count = count;
-	cp->index = index;
-	if (index == 0)
-		vp->index = chan_list->num_elems;
-	chan_list->num_elems++;
-	/* add new channel to chan_list */
+	cp->type = type;
+	cp->expr = expr;
+	cp->index = chan_list->num_elems++;
+
+	/* add to chan_list */
 	if (!chan_list->first)
 		chan_list->first = cp;
 	else
@@ -1201,8 +1246,25 @@ static Chan *new_channel(ChanList *chan_list, Var *vp, uint count, uint index)
 	return cp;
 }
 
+static EvFlag *new_event_flag(EvFlagList *evflag_list, Node *expr)
+{
+	EvFlag *ef = new(EvFlag);
+
+	ef->expr = expr;
+	ef->index = evflag_list->num_elems++;
+
+	/* add to evflag_list */
+	if (!evflag_list->first)
+		evflag_list->first = ef;
+	else
+		evflag_list->last->next = ef;
+	evflag_list->last = ef;
+	ef->next = 0;
+	return ef;
+}
+
 /* Allocate a sync queue structure, add it to the sync queue list,
-   and initialize members index, var, and size. Also increase sync queue
+   and initialise members index, var, and size. Also increase sync queue
    count in the list. */
 static SyncQ *new_sync_queue(SyncQList *syncq_list, uint size)
 {
@@ -1280,6 +1342,9 @@ static int connect_variable(Node *ep, Node *scope, void *parg)
 	assert(ep);
 	assert(ep->tag == E_VAR);
 	assert(scope);
+
+	if (ep->extra.e_var)
+		return FALSE;	/* already connected */
 
 #ifdef DEBUG
 	report("connect_variable: %s, line %d\n", ep->token.str, ep->token.line);
@@ -1460,7 +1525,8 @@ static uint connect_states(SymTable st, Node *prog)
 				assert(!next_sp || strcmp(tp->token.str,next_sp->token.str) == 0);
 #ifdef DEBUG
 				report("connect_states: ss = %s, state = %s, when(...){...} state (%s,%d)\n",
-					ssp->token.str, sp->token.str, tp->token.str, next_sp->extra.e_state->index);
+					ssp->token.str, sp->token.str, tp->token.str,
+					next_sp ? next_sp->extra.e_state->index : -1);
 #endif
 			}
 		}
@@ -1597,29 +1663,4 @@ static void check_states_reachable_from_first(Node *ssp)
 				sp->token.str, ssp->token.str);
 		}
 	}
-}
-
-/* Assign event bits to event flags and associate pv channels with
- * event flags. Return number of event flags found.
- */
-static uint assign_ef_bits(Node *scope)
-{
-	Var	*vp;
-	uint	num_event_flags = 0;
-	VarList	*var_list;
-
-	var_list = var_list_from_scope(scope);
-
-	if (scope->tag == D_FUNCDEF)
-		return 0;
-	/* Assign event flag numbers (starting at 1) */
-	foreach (vp, var_list->first)
-	{
-		if (vp->type->tag == T_EVFLAG)
-		{
-			assert(vp->chan.evflag);
-			vp->chan.evflag->index = ++num_event_flags;
-		}
-	}
-	return num_event_flags;
 }

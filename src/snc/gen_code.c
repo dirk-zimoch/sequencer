@@ -76,13 +76,13 @@ void generate_code(Program *p)
 	foreach (defn, p->prog->prog_defns) gen_global_defn(ctx, defn);
 
 	/* Variable declarations */
-	gen_var_struct(p->prog, p->options.reent);
+	gen_var_struct(p->prog, p->options->reent);
 
 	/* Function declarations */
 	gen_func_decls(p->prog);
 
 	/* State and state set functions */
-	gen_ss_code(ctx, p->prog, p->chan_list);
+	gen_ss_code(ctx, p->prog, p->chan_list, p->evflag_list);
 
 	/* Channel, state set, and program tables */
 	gen_tables(p);
@@ -91,7 +91,7 @@ void generate_code(Program *p)
 	foreach (defn, p->prog->prog_xdefns) gen_global_defn(ctx, defn);
 
 	/* Main function */
-	if (p->options.main) gen_main(p->name);
+	if (p->options->main) gen_main(p->name);
 
 	/* Sequencer registration */
 	gen_init_reg(p->name);
@@ -236,14 +236,13 @@ static void gen_global_defn(uint ctx, Node *ep)
 		foreach (member, ep->structdef_members)
 		{
 			gen_line_marker(member);
-			indent(1);
 			switch (member->tag)
 			{
 			case D_DECL:
-				gen_var_decl(member->extra.e_decl);
-				gen_code(";\n");
+				gen_var_and_pv_decl(member->extra.e_decl, 1);
 				break;
 			case T_TEXT:
+				indent(1);
 				gen_code("%s\n", member->token.str);
 				break;
 			default:

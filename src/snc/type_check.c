@@ -153,7 +153,7 @@ Type *type_of(Node *e)
         } else {
             return e->type = no_type;
         }
-    case E_INIT:                        /* array or struct initializer [elems] */
+    case E_INIT:                        /* array or struct initialiser [elems] */
         return e->type = no_type;
     case E_MEMBER:                      /* struct or union member [] */
         assert(impossible);             /* handled in case E_SELECT */

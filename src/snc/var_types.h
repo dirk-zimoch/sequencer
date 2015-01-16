@@ -36,6 +36,7 @@ enum foreign_type_tag {
 struct type {
     enum type_tag tag;
     unsigned is_const:1;
+    unsigned contains_pv;
     union {
         enum prim_type_tag prim;
         struct {
@@ -60,7 +61,8 @@ struct type {
 #endif
         struct {
             const char *name;
-            Node *member_decls;
+            unsigned num_members;   /* only SNL members, not escaped code */
+            Node *member_decls;     /* all members, including escaped code */
             int mark;               /* avoid infinite recursion when resolving struct names */
         } structure;
         struct {
@@ -72,15 +74,20 @@ struct type {
 /* base type for any combination of pointers and arrays */
 Type *base_type(Type *t);
 
-/* array length in 1st and 2nd dimension */
-unsigned type_array_length1(Type *t);
-unsigned type_array_length2(Type *t);
+/* child type for pointer, array, function, and pv */
+Type *child_type(Type *t);
+
+/* array length */
+unsigned type_array_length(Type *t);
 
 /* whether type can be assign'ed to a PV */
 unsigned type_assignable(Type *t);
 
 /* whether type contains PV marker */
 Type *type_contains_pv(Type *t);
+
+#define type_is_valid_pv_child(t) ((t)->tag == T_PRIM || (t)->tag == T_VOID || \
+    ((t)->tag == T_ARRAY && (t)->val.array.elem_type->tag == T_PRIM))
 
 #define type_is_function(t) ((t)->tag == T_FUNCTION ? t : \
     (t)->tag == T_POINTER && (t)->val.pointer.value_type->tag == T_FUNCTION ? \
