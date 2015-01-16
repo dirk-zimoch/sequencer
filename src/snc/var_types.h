@@ -61,6 +61,7 @@ struct type {
         struct {
             const char *name;
             Node *member_decls;
+            int mark;               /* avoid infinite recursion when resolving struct names */
         } structure;
         struct {
             Type *value_type;

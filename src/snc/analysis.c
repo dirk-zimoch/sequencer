@@ -94,13 +94,23 @@ Program *analyse_program(Node *prog, Options options)
 	return p;
 }
 
+static void fixup_struct_refs(SymTable st, Type *t);
+
 static void analyse_structdef(SymTable st, Node *defn)
 {
+	Node *d;
 	assert(defn->tag == D_STRUCTDEF);
 	if (!sym_table_insert(st, defn->token.str, structdefs, 
 		mk_structure_type(defn->token.str, defn->structdef_members)))
 	{
 		warning_at_node(defn, "ignoring duplicate struct declaration\n");
+	}
+	foreach (d, defn->structdef_members)
+	{
+		if (d->tag == D_DECL)
+		{
+			fixup_struct_refs(st, d->extra.e_decl->type);
+		}
 	}
 }
 
@@ -318,10 +328,7 @@ static void fixup_struct_refs(SymTable st, Type *t)
 			if (r)
 			{
 				assert(r->tag == T_STRUCT);
-				t->tag = r->tag;
-				t->val.structure.name = r->val.structure.name;
-				t->val.structure.member_decls = r->val.structure.member_decls;
-				/* NOTE: do *not* change parent! */
+				*t = *r;
 			}
 			break;
 		case F_UNION:
@@ -349,15 +356,20 @@ static void fixup_struct_refs(SymTable st, Type *t)
 		break;
 #endif
 	case T_STRUCT:
-		foreach (d, t->val.structure.member_decls)
+		if (!t->val.structure.mark)
 		{
-			if (d->tag == D_DECL)
+			t->val.structure.mark = TRUE;
+			foreach (d, t->val.structure.member_decls)
 			{
+				if (d->tag == D_DECL)
+				{
 #ifdef DEBUG
-				report("struct member %s.%s:\n", t->val.structure.name, d->extra.e_decl->name);
+					report("struct member %s.%s:\n", t->val.structure.name, d->extra.e_decl->name);
 #endif
-				fixup_struct_refs(st, d->extra.e_decl->type);
+					fixup_struct_refs(st, d->extra.e_decl->type);
+				}
 			}
+			t->val.structure.mark = FALSE;
 		}
 		break;
 	case T_PV:
