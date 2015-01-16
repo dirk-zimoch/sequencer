@@ -15,12 +15,12 @@ in the file LICENSE that is included with this distribution.
 static PVTYPE pv_type_map[] =
 {
 	{ P_CHAR,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(char)		},
-	{ P_SHORT,	pvTypeSHORT,	pvTypeTIME_SHORT,	sizeof(short)		},
-	{ P_INT,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(int)		},
-	{ P_LONG,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(long)		},
 	{ P_UCHAR,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(unsigned char)	},
+	{ P_SHORT,	pvTypeSHORT,	pvTypeTIME_SHORT,	sizeof(short)		},
 	{ P_USHORT,	pvTypeSHORT,	pvTypeTIME_SHORT,	sizeof(unsigned short)	},
+	{ P_INT,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(int)		},
 	{ P_UINT,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(unsigned int)	},
+	{ P_LONG,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(long)		},
 	{ P_ULONG,	pvTypeLONG,	pvTypeTIME_LONG,	sizeof(unsigned long)	},
 	{ P_INT8T,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(epicsInt8)	},
 	{ P_UINT8T,	pvTypeCHAR,	pvTypeTIME_CHAR,	sizeof(epicsUInt8)	},
