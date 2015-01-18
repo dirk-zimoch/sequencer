@@ -32,7 +32,9 @@ sync a to ef_a;
 
 entry {
     seq_test_init(5*NTESTS);
+    testDiag("pvSyncSingle x");
     pvSync(x,ef_x);
+    testDiag("efSet(ef_putx)");
     efSet(ef_putx);
     efClear(ef_i);
     efClear(ef_a);
@@ -65,8 +67,8 @@ ss pvSyncY {
     state pvSync {
         when (efTestAndClear(ef_i)) {
             testPass("event on i=%d", i);
-            pvSyncs(a, NTESTS, ef_a);
-            testDiag("after pvSyncs(a, NTESTS, ef_a)");
+            pvArraySync(a, NTESTS, ef_a);
+            testDiag("after pvArraySync(a, NTESTS, ef_a)");
             a[i] = i;
             testOk1(pvPut(a[i])==pvStatOK);
             testDiag("after pvPut(a[i])");
@@ -78,7 +80,8 @@ ss pvSyncY {
             if (i >= NTESTS-1) {
                 state done;
             }
-            pvSyncs(a, NTESTS, NOEVFLAG);
+            pvArraySync(a, NTESTS, NOEVFLAG);
+            testDiag("after pvArraySync(a, %d, NOEVFLAG)", NTESTS);
             efSet(ef_putx);
         } state pvSync
     }
@@ -90,11 +93,4 @@ ss pvSyncY {
 
 exit {
     seq_test_done();
-}
-
-void pvSyncs(void pv *xs, unsigned nelm, evflag ef)
-{
-    int i;
-    for (i=0; i<nelm; i++)
-        pvSync(xs[i], ef);
 }
