@@ -18,6 +18,7 @@ my $tests = {
   nesting_depth           => { warnings => 0, errors => 0  },
   pvArray                 => { warnings => 0, errors => 21 },
   pvNotAssigned           => { warnings => 0, errors => 20 },
+  pv_and_assign           => { warnings => 2, errors => 0  },
   reservedId              => { warnings => 0, errors => 2  },
   state_not_reachable     => { warnings => 3, errors => 0  },
   sync_not_assigned       => { warnings => 0, errors => 1  },
