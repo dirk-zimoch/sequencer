@@ -7,11 +7,11 @@ in the file LICENSE that is included with this distribution.
 program efGlobalTest
 
 ss x {
-    evflag a;
+    evflag a; /* ok */
     state y {
-        evflag b;
+        evflag b; /* ok */
         when () {
-            evflag c;
+            evflag c; /* error: declaring channels or event flags is not allowed here */
         } exit
     }
 }

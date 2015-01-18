@@ -9,7 +9,11 @@ program delay_in_action
 ss test {
     state test {
         when (delay(1)) {
-            delay(2);
+        } exit
+        when () {
+            if (delay(0.5)) { /* no longer an error */
+                state test;
+            }
         } exit
     }
 }

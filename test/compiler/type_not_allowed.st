@@ -8,10 +8,10 @@ foreign a_f[1];         /* error: array of foreign entities */
 foreign f_f();          /* error: function returning foreign entity */
 #endif
 
-evflag *p_ef;           /* error: pointer to event flag */
-evflag a_ef[1];         /* error: array of event flags */
+evflag *p_ef;           /* ok */
+evflag a_ef[1];         /* ok */
 evflag const c_ef;      /* error: constant event flag */
-evflag f_ef();          /* error: function returning event flag */
+evflag f_ef();          /* ok */
 
 int (const c_a)[1];     /* error: constant array */
 int (const c_f)();      /* warning: constant function */

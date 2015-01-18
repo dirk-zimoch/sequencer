@@ -6,8 +6,8 @@ use Test::More;
 
 my $tests = {
   cast                    => { warnings => 0, errors => 0  },
-  delay_in_action         => { warnings => 0, errors => 1  },
-  efGlobal                => { warnings => 0, errors => 3  },
+  delay_in_action         => { warnings => 0, errors => 0  },
+  efGlobal                => { warnings => 0, errors => 1  },
   exOpt_UnrecOpt          => { warnings => 1, errors => 0  },
   foreignGlobal           => { warnings => 1, errors => 3  },
   foreignNoInit           => { warnings => 0, errors => 1  },
@@ -24,7 +24,7 @@ my $tests = {
   syncq_no_size           => { warnings => 1, errors => 0  },
   syncq_not_assigned      => { warnings => 0, errors => 1  },
   syncq_size_out_of_range => { warnings => 0, errors => 1  },
-  type_not_allowed        => { warnings => 3, errors => 13 },
+  type_not_allowed        => { warnings => 3, errors => 10 },
 };
 
 my @progs = sort(keys(%$tests));
