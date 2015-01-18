@@ -1,9 +1,8 @@
-SNL Reference for Version 2.2
+SNL Reference for Version 2.3
 =============================
 
 This chapter gives a detailed reference for the SNL syntax and semantics and
-for the built-in functions of SNL in version 2.2. The `documentation for
-version 2.1`_ is and will remain available, too.
+for the built-in functions of SNL in version 2.3.
 
 Formal syntax is given in `BNF`_. Multiple rules for the same
 `nonterminal symbol`_ mean that any of the given rules may apply. `Terminal
@@ -12,7 +11,6 @@ symbols`_ are enclosed in double quotes.
 .. _BNF: http://en.wikipedia.org/wiki/Backus-Naur_Form
 .. _nonterminal symbol: http://en.wikipedia.org/wiki/Terminal_and_nonterminal_symbols#Nonterminal_symbols
 .. _terminal symbols: http://en.wikipedia.org/wiki/Terminal_and_nonterminal_symbols#Terminal_symbols
-.. _documentation for version 2.1: http://www-csr.bessy.de/control/SoftDist/sequencer-2-1/Reference.html
 
 Lexical Syntax
 --------------
@@ -157,6 +155,7 @@ parameters in the same form as if specified on invocation (see
    initial_defn: `option`
    initial_defn: `funcdef`
    initial_defn: `structdef`
+   initial_defn: `enumdef`
    initial_defn: `c_code`
 
 .. productionlist::
@@ -164,6 +163,7 @@ parameters in the same form as if specified on invocation (see
    final_defns: 
    final_defn: `funcdef`
    final_defn: `structdef`
+   final_defn: `enumdef`
    final_defn: `c_code`
 
 Global (top-level) definitions, see `Definitions`_ for details. Note that
@@ -230,23 +230,57 @@ Function Definitions
 .. productionlist::
    funcdef: `basetype` `declarator` `block`
 
-Function definitions are very much like those in C.
+Function definitions are mostly like those in C.
 
-The most important difference is that functions declared in SNL get passed
-certain implicit parameters. This makes it possible to call built-in
-functions as if the code were a normal action block. Note, however, that
-there is currently no way to *pass* channel ("assigned") variables to SNL
-functions in such a way that you can call built-in functions on them. The
-"assigned" status of such a variable is lost and it gets passes to the
-function as a normal C value. This means you can call built-in functions
-that expect such a variable only if the variable was declared at the
-top-level. Lifting this limitation is planned for a future release.
+One difference is that functions declared in SNL get passed certain implicit
+parameters. This makes it possible to call built-in functions as if the code
+were a normal action block.
 
 Another difference from C is that SNL functions automatically scope over the
-whole program, no matter where they are defined. It is not necessary (but
-allowed) to repeat the function declaration (without the defining code
-block, commonly referred to as a "function prototype") at the top of the
-program.
+whole program, no matter where they are defined. It is neither necessary nor
+allowed to repeat the function declaration (without the defining code block,
+commonly referred to as a "function prototype") at the top of the program.
+
+.. versionadded:: 2.3
+
+If a parameter or return type of a user defined function contains a "pv"
+marker (see section :ref:`pv type constructor`), snc takes care
+that what actually gets passed to or from the function is the channel
+object, not just the current value of the expression. Thus, expressions of
+pv type, or expressions that contain parts that are of pv type, can be
+passed to user defined functions just as with built-in functions, and you
+can call the built-in functions on function parameters just like for
+variables. In fact, this is what motivated the introduction of the "pv" type
+constructor in the first place.
+
+The SNL compiler now contains a rudimentary type checker. However, type
+checking is done only where necessary to decide whether to pass a simple
+value or a channel object.
+
+Note, that a channel object still looses its special channel status when
+passed to a context that does not expect a channel but an ordinary value.
+This is the case for all foreign function calls as well as the arithmetic,
+logical, and bit-wise operators, and also the assignment operator. It is
+*not* the case, however, for the 'address-of' operator ("&").
+
+You can think of this as an implicit type cast to the underlying value type;
+in fact, the semantics of pv types are very similar to the (default)
+semantics of *references* in C++.
+
+.. versionadded:: 2.3
+
+Parameter declarations in function definitions may be accompanied by a
+default value for that parameter. The syntax is the same as the one for a
+variable initializer. This feature was inspired by C++ and it has the same
+semantics (and the same restrictions): such functions can be called with
+less than the maximum number of arguments, the remaining parameters are
+filled with their default values. Thus, if a parameter has a default, all
+parameter to its right must have defaults, too.
+
+Default parameters were added not only because they are useful to the
+programmer, but also because they are needed to give built-in functions a
+valid SNL type. This means that the compiler no longer has to handle calls
+to built-in functions specially.
 
 
 Type Definitions
@@ -267,6 +301,32 @@ only at the top level. They are translated to the equivalent struct
 definition in C. Differences to C are that bit fields are not supported, and
 that member types are limited to SNL types (built-in or user defined).
 
+You can use escape syntax inside a struct definition to add members to a
+struct that are not expressible in SNL. Such members will be added to the
+generated C struct definition, but keep in mind, that SNL does not know
+anything about the escaped code: it could contain more than one member, for
+instance. Therefore, initializers for structs "jump over" such members, just
+as if the escaped members did not exist. You can, however, access such
+members in any other way.
+
+.. versionadded:: 2.3
+
+.. productionlist::
+   enumdef: "enum" `identifier` "{" `choices` `opt_comma` "}" ";"
+   choice: `identifier`
+   choice: `identifier` "=" `expr`
+   choices: `choice`
+   choices: `choices` "," `choice`
+   opt_comma: 
+   opt_comma: ","
+
+Enum definitions are an experimental feature and not fully supported yet.
+They are currently understood by the parser but otherwise ignored and no
+code is generated for them. When full support is added, user defined enums
+will be allowed as value type for a pv declaration (like primitive types);
+maybe there will be extra syntax to (optionally) specify of an enum string
+for a choice.
+
 
 Variable Declarations
 ^^^^^^^^^^^^^^^^^^^^^
@@ -283,6 +343,7 @@ Variable Declarations
    declarator: `declarator` "(" `param_decls` ")"
    declarator: "*" `declarator`
    declarator: "const" `declarator`
+   declarator: "pv" `declarator`
    variable: `identifier`
    init_expr: "{" `init_exprs` "}"
    init_expr: "(" `type_expr` ")" "{" `init_exprs` "}"
@@ -290,6 +351,7 @@ Variable Declarations
    init_exprs: `init_exprs` "," `init_expr`
    init_exprs: `init_expr`
    init_exprs: 
+   init_expr: "pv" `pv_init_expr`
 
 .. versionadded:: 2.1
 
@@ -363,6 +425,106 @@ respecting the precedences (postfix binds stronger than prefix). This
 works for "const" exactly as for array subscripts, pointers, and
 parameter lists.
 
+.. _pv type constructor:
+
+The "pv" type constructor
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. versionadded:: 2.3
+
+The ``pv`` type constructor syntactically behaves like the other prefix type
+operators (``const``, ``*``). It marks a part of a variable or function
+argument or struct member as available for assigning them to a channel (or
+PV) using either an `assign` clause or a `pv initializer`. Its
+argument must be a `prim_type` or an array of `prim_type`, and
+it may not be ``const``, but otherwise there are no restrictions as to where
+``pv`` may appear inside a type.
+
+For function parameters, and under the pointer (``*``) type constructor, the
+argument of a ``pv`` type constructor may be "void". Any channel object can
+be passed where a ``void pv`` is expected. However, the only thing you can
+do with a ``void pv`` is to pass it on to some other function expecting a
+"void pv". Built-in functions such as `pvGet` that operate on pv
+objects take a ``void pv`` as argument (or a ``void pv *`` for those that
+work on arrays of pv objects).
+
+Note that, as in C, postfix operators (like the array type constructor)
+always have higher precedence than prefix ones; this means that, e.g. ::
+
+   int pv x[2];
+
+declares an array of two 'pv of int', whereas ::
+
+   int (pv y)[2];
+
+declares a (single) pv with value type 'array of two int'.
+
+Marking parts of the type of a variable with ``pv`` has the same effect as
+an `assign` clause on that part. For instance, the above declaration
+of ``x`` is equivalent to ::
+
+   int x[2];
+   assign x to {};
+
+or ::
+
+   int x[2];
+   assign x[0];
+   assign x[1];
+
+whereas the one for ``y`` is the same as ::
+
+   int y[2];
+   assign y;
+
+However, using an `assign` clause to retro-fit the ``pv`` marker to
+the type of a variable (or parts of it) is *deprecated* (and causes a
+compiler warning); its purpose is backward compatibility for old programs
+and it works only in those cases where an `assign` was allowed
+previously (i.e. single PVs and one-dimensional arrays of them). It is
+highly recommended to always mark the relevant parts of a variable's type
+with ``pv``, even if this is not strictly necessary.
+
+It is allowed to declare pointers with arguments that contain a ``pv`` marker,
+as well as functions taking them as argument and returning them. Such
+declarations do not cause any actual channels to be allocated, which happens
+only if
+
+* a variable is declared,
+
+* its scope is the top-level, a state set, or a state,
+
+* it allocates static storage for the parts of the variable marked as ``pv``.
+
+The last point means that channels are only allocated if the item is
+
+* a single channel variables, or
+
+* an array or a struct containing such an item.
+
+With no initializer, the channel name defaults to "" for all contained ``pv``
+parts.
+
+
+.. _pv initializer:
+
+PV Initializer
+~~~~~~~~~~~~~~
+
+.. productionlist::
+   pv_init_expr: `string`
+   pv_init_expr: "{" "}"
+   pv_init_expr: "{" `pv_init_exprs` "}"
+   pv_init_exprs: `pv_init_expr`
+   pv_init_exprs: `pv_init_exprs` "," `pv_init_expr`
+
+If an initializer for a variable with a pv part (which may be a struct
+member) is present, and is headed by the "pv" keyword, then the initializer
+(that is, the part following the "pv") is interpreted as a channel
+assignment for the variable. A pv initializer is either a single channel
+name (a string) or a (possibly empty) list of pv initializers enclosed in
+curly braces (an aggregate initializer). Aggregate initializers are used for
+arrays and structs that contain parts of pv type.
 
 .. _foreign entities:
 
@@ -443,6 +605,7 @@ same restrictions as in C.
    prim_type: "unsigned" "char"
    prim_type: "unsigned" "short"
    prim_type: "unsigned" "int"
+   prim_type: "unsigned"
    prim_type: "unsigned" "long"
    prim_type: "int8_t"
    prim_type: "uint8_t"
@@ -466,6 +629,10 @@ been added. However, int64_t and uint64_t are not supported because
 primitive types must correspond to the primitive EPICS types, and EPICS does
 not yet support 64 bit integers.
 
+..versionadded:: 2.3
+
+Plain "unsigned" as abbeviation for "unsigned int" as in C.
+
 Type Expressions
 ~~~~~~~~~~~~~~~~
 
@@ -483,10 +650,12 @@ Type Expressions
    abs_decl: "*" `abs_decl`
    abs_decl: "const"
    abs_decl: "const" `abs_decl`
+   abs_decl: "pv"
+   abs_decl: "pv" `abs_decl`
    param_decls: 
    param_decls: `param_decl`
    param_decls: `param_decls` "," `param_decl`
-   param_decl: `basetype` `declarator`
+   param_decl: `basetype` `init_declarator`
    param_decl: `type_expr`
 
 Type expressions closely follow declaration syntax just as in C. They
@@ -596,41 +765,49 @@ Process Variables
 The syntactic constructs in this section allow program variables to be
 connected to externally defined process variables.
 
+Process Variable Expressions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. versionadded:: 2.3
+
+.. productionlist::
+   var_expr: `var_expr` "[" `integer_literal` "]"
+   var_expr: `var_expr` "." `member`
+   var_expr: `variable`
+
+A restricted form of expression in which only variable reference, constant
+array subscript, and struct member selection are allowed. They denote a part
+of a variable an are suitable for use in `assign`, `monitor`,
+`sync`, and `syncq` clauses.
+
 assign
 ~~~~~~
 
 .. productionlist::
-   assign: "assign" `variable` `to` `string` ";"
-   assign: "assign" `variable` `subscript` `to` `string` ";"
-   assign: "assign" `variable` `to` "{" `strings` "}" ";"
-   assign: "assign" `variable` ";"
+   assign: "assign" `var_expr` `to` `pv_init_expr` ";"
+   assign: "assign" `var_expr` ";"
    to: "to"
    to: 
-   strings: `strings` "," `string`
-   strings: `string`
-   strings: 
    subscript: "[" `integer_literal` "]"
 
-This assigns or connects program variables to named or anonymous process
-variables.
+This assigns (connects) the designated part of a program variable to one or
+more named or anonymous process variables. The (optional) right hand side
+(after the ``to``) is a pv init expression consisting of a channel name or an
+aggregate of pv init expressions enclosed in curly braces. Their syntax and
+semantic is exactly as for `pv initializer`\ s.
 
-There are four variants of the `assign` statement. The first one
-assigns a (scalar or array) variable to a single process variable.
-The second one assigns a single element of an array variable to a
-single process variable. The third one assigns elements of an array
-variable to separate process variables.
+In an aggregate pv initializer, if the number of PV names does not match the
+number of elements in the array or the number of members of a struct, then
+the rule is that
 
-For the third variant, if the number of PV names does not match the number
-of elements in the array, then the rule is that
-
-* missing PV names default to "", and
+* for arrays, missing PV names default to "",
 
 * excess PV names are discarded.
 
 .. versionadded:: 2.1
 
-The fourth variant serves as an abbreviation for
-the first variant, in the special case where the PV name is empty (``""``).
+The second variant serves as an abbreviation for the first variant, in the
+special case where the PV name is empty (``""``).
 
 Assigned variables must be of global life time, see
 `variable scope`. Assigned variables, or separately assigned
@@ -670,18 +847,15 @@ underlying process variable. The native count is determined when a
 connection is established. For anonymous PVs, the length of the array is
 used.
 
-Pointer types may not be assigned to process variables.
-
 
 monitor
 ~~~~~~~
 
 .. productionlist::
-   monitor: "monitor" `variable` `opt_subscript` ";"
-   opt_subscript: `subscript`
-   opt_subscript: 
+   monitor: "monitor" `var_expr` ";"
 
-This sets up a monitor for an assigned variable or array element.
+This sets up a monitor for a variable or a part of it. The expression that
+denotes the variable's part must be of pv type.
 
 Monitored variables are automatically updated whenever the underlying
 process variable changes its value. Note, however, that this depends on
@@ -697,17 +871,17 @@ sync
 ~~~~
 
 .. productionlist::
-   sync: "sync" `variable` `opt_subscript` `to` `event_flag` ";"
+   sync: "sync" `var_expr` `to` `event_flag` ";"
    event_flag: `identifier`
 
-This declares a variable to be synchronized with an event flag.
+This declares (parts of) a variable to be synchronized with an event flag.
+The expression that denotes the variable's part must be of pv type.
 
 When a monitor is posted on any of the process variables associated
 with the event flag (and these are `monitor`\ed), or when an
 asynchronous get or put operation completes, the corresponding event
 flag is set.
 
-The variable must be `assign`\ed and `monitor`\ed.
 A variable can be mentioned in at most one sync clause, but an event
 flag may appear in more than one such clause. The variable may be an
 array, and as such may be associated with multiple process variables.
@@ -722,18 +896,19 @@ syncQ
 ~~~~~
 
 .. productionlist::
-   syncq: "syncq" `variable` `opt_subscript` `to` `event_flag` `syncq_size` ";"
-   syncq: "syncq" `variable` `opt_subscript` `syncq_size` ";"
+   syncq: "syncq" `var_expr` `syncq_size` ";"
+   syncq: "syncq" `var_expr` `to` `event_flag` `syncq_size` ";"
    syncq_size: `integer_literal`
    syncq_size: 
 
-This declares a variable to be queued.
+This declares (parts of) a variable to be queued.
+The expression that denotes the variable's part must be of pv type.
 
-When a monitor is posted on any of the process variables associated
-with the given program variable, the new value is written to the end
-of the queue. If the queue is already full, the last (youngest) entry
-is overwritten. The `pvGetQ` function reads items from the
-queue.
+When a monitor is posted on any of the process variables associated with the
+given program variable (or an asynchronous get request for them completes),
+the new value is written to the end of the queue. If the queue is already
+full, the last (youngest) entry is overwritten. The `pvGetQ` function reads
+items from the queue.
 
 The variable must be `assign`\ed and `monitor`\ed.
 Specifying a size (number of elements) for the queue is optional. If
