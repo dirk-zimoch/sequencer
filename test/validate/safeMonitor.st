@@ -26,6 +26,10 @@ ss read {
     double on_entry;
     int n = 1;
     state react {
+        option -e;
+        entry {
+            testDiag("read: state react entry");
+        }
         when (n > MAX_TEST) {
         } exit
         when (efTestAndClear(ef_cnt)) {
