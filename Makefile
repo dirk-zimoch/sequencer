@@ -12,7 +12,7 @@ test_DEPEND_DIRS = src
 DIRS += examples
 examples_DEPEND_DIRS = src
 
-BRANCH = 2-2
+BRANCH = 2-3
 DEFAULT_REPO = rcsadm@repo.acc.bessy.de:/opt/repositories/controls/darcs/epics/support/seq/branch-$(BRANCH)
 SEQ_PATH = www/control/SoftDist/sequencer-$(BRANCH)
 USER_AT_HOST = wwwcsr@www-csr.bessy.de
