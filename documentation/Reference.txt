@@ -1028,6 +1028,16 @@ definitions (`assign`, `monitor`, `sync`, and
 
 See `variable scope`_ for details on what local definitions mean.
 
+.. versionadded:: 2.3
+
+Normally, `assign`, `monitor`, `sync`, and `syncq` may only refer to
+variables declared in the same scope. As an exception, you can declare a
+`monitor` for a global variable inside a state set. This means only the
+state set in which the monitor clause appears will get monitors (updates)
+for this variable. Defining a `monitor` globally is the same as defining it
+separately in all state sets of the program.
+
+
 State
 ^^^^^
 
@@ -1050,12 +1060,15 @@ State Local Definition
 ~~~~~~~~~~~~~~~~~~~~~~
 
 .. productionlist::
-   state_defn: `assign`
-   state_defn: `monitor`
-   state_defn: `sync`
-   state_defn: `syncq`
    state_defn: `declaration`
    state_defn: `option`
+
+Directly following the opening braces of a state block may come
+`StateOption`\s and `declaration`\s.
+
+.. versionchanged:: 2.3
+
+State local `assign`, `monitor`, `sync`, and `syncq` are no longer allowed.
 
 .. _StateOption:
 
