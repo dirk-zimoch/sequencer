@@ -127,9 +127,13 @@ epicsShareFunc CH_ID seq_pvCreate(
 	enum prim_type_tag varType,	/* variable (base) type */
 	unsigned	count,		/* element count for arrays */
 	evflag		ef,		/* event flag if synced */
-	seqBool		monitored,	/* whether channel should be monitored */
 	unsigned	queueSize,	/* syncQ queue size (0=not queued) */
 	unsigned	queueIndex);	/* syncQ queue index */
+
+epicsShareFunc void seq_pvAddMonitor(
+	struct program_instance	*sp,	/* program instance */
+	CH_ID		ch,		/* channel object */
+	unsigned	ssNum);		/* state set number */
 
 epicsShareFunc size_t seq_pvOffset(CH_ID ch);
 

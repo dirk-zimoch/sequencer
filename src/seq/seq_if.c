@@ -420,8 +420,8 @@ static void anonymous_put(SS_ID ss, CHAN *ch)
 	}
 	else
 	{
-		/* Set dirty flag only if monitored */
-		ss_write_buffer(ch, var, 0, ch->monitored);
+		/* Set dirty flag for those state sets that monitor us */
+		ss_write_buffer(ch, var, 0, TRUE);
 	}
 	/* If there's an event flag associated with this channel, set it */
 	if (ch->syncedTo)
@@ -785,29 +785,31 @@ static pvStat seq_pvSingleMonitor(SS_ID ss, CH_ID ch, boolean turn_on, const cha
 {
 	PROG	*sp = ss->prog;
 	DBCHAN	*dbch = ch->dbch;
-	pvStat	status;
+	pvStat	status = pvStatOK;
+	unsigned nss;
 
-	if (!dbch)
+	if (!dbch && !optTest(sp, OPT_SAFE))
 	{
-		if (optTest(sp, OPT_SAFE))
-		{
-			ch->monitored = TRUE;
-			return pvStatOK;
-		}
-		else
-		{
-			errlogSevPrintf(errlogMajor,
-				"%s(%s): user error (not assigned to a PV)\n",
-				what, ch->varName
-			);
-			return pvStatERROR;
-		}
+		errlogSevPrintf(errlogMajor,
+			"%s(%s): user error (not assigned to a PV)\n",
+			what, ch->varName
+		);
+		return pvStatERROR;
 	}
-	ch->monitored = turn_on;
-	status = seq_camonitor(ch, turn_on);
-	if (status != pvStatOK)
+	/* for compatibility: set monitored flag for each state set */
+	for (nss = 0; nss < sp->numSS; nss++)
 	{
-		pv_call_failure(dbch, metaPtr(ch,ss), status);
+		SSCB *ss = sp->ss + nss;
+		ss->monitored[chNum(ch)] = turn_on;
+	}
+	if (dbch)	/* named channel */
+	{
+		dbch->monitored = turn_on;
+		status = seq_camonitor(ch, turn_on);
+		if (status != pvStatOK)
+		{
+			pv_call_failure(dbch, metaPtr(ch,ss), status);
+		}
 	}
 	return status;
 }

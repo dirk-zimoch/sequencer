@@ -275,6 +275,12 @@ static boolean init_sscb(PROG *sp, SSCB *ss, seqSS *seqSS)
 				return FALSE;
 			}
 		}
+		ss->monitored = newArray(boolean, sp->numChans);
+		if (!ss->monitored)
+		{
+			errlogSevPrintf(errlogFatal, "init_sscb: calloc failed\n");
+			return FALSE;
+		}
 	}
 	/* note: do not pre-allocate request structures */
 	ss->dead = epicsEventCreate(epicsEventEmpty);
@@ -330,6 +336,7 @@ void seq_free(PROG *sp)
 
 		epicsEventDestroy(ss->syncSem);
 		free(ss->metaData);
+		free(ss->monitored);
 
 		epicsEventDestroy(ss->dead);
 

@@ -44,6 +44,7 @@ typedef struct var_list		VarList;
 typedef struct func_symbol	FuncSym;
 typedef struct const_symbol	ConstSym;
 typedef struct type		Type;		/* struct defined in var_types.h */
+typedef struct monitor_node	Monitor;
 
 typedef unsigned long long	NodeMask;
 typedef unsigned int		uint;
@@ -107,6 +108,7 @@ struct state				/* extra data for state clauses */
 
 struct state_set			/* extra data for state set clauses */
 {
+	uint		index;		/* index in array of seqSS structs */
 	uint		num_states;	/* number of states */
 	VarList		*var_list;	/* list of 'local' variables */
 };
@@ -218,9 +220,15 @@ struct channel				/* channel assignment info */
 	uint	index;			/* index in channel list */
 	Node	*expr;			/* path from variable to this part */
 	Type	*type;			/* cached type of this part */
-	uint	monitor:1;		/* whether this channel is monitored */
+	Monitor	*monitor;		/* monitor scopes */
 	Var	*sync;			/* event flag variable if sync'd */
 	SyncQ	*syncq;			/* sync queue if syncQ'd */
+};
+
+struct monitor_node
+{
+	Node	*scope;
+	Monitor	*next;
 };
 
 struct event_flag

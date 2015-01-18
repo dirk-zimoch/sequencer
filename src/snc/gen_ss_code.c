@@ -13,6 +13,7 @@ in the file LICENSE that is included with this distribution.
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
 
 #include "node.h"
 #include "analysis.h"
@@ -788,6 +789,7 @@ static void gen_channel_init(uint context, Chan *cp)
 {
 	Type *basetype, *value_type;
 	enum prim_type_tag prim_tag;
+	Monitor *mp;
 
 	assert(cp->type->tag == T_PV);
 
@@ -867,17 +869,22 @@ static void gen_channel_init(uint context, Chan *cp)
 	else
 		gen_code("NOEVFLAG");
 
-	/* whether channel should be monitored */
-	gen_code(", %d, ", cp->monitor);
-
 	/* syncq size (0=not queued) and index */
 	if (!cp->syncq)
-		gen_code("0, 0");
+		gen_code(", 0, 0");
 	else if (!cp->syncq->size)
-		gen_code("DEFAULT_QUEUE_SIZE, %d", cp->syncq->index);
+		gen_code(", DEFAULT_QUEUE_SIZE, %d", cp->syncq->index);
 	else
-		gen_code("%d, %d", cp->syncq->size, cp->syncq->index);
+		gen_code(", %d, %d", cp->syncq->size, cp->syncq->index);
 	gen_code(");\n");
+
+	foreach (mp, cp->monitor)
+	{
+		indent(1);
+		gen_code("seq_pvAddMonitor("NM_ENV", ");
+		gen_expr(context, mk_pv_type(mk_no_type()), cp->expr, 0);
+		gen_code(", %d);\n", (mp->scope->tag == D_PROG) ? UINT_MAX : mp->scope->extra.e_ss->index);
+	}
 }
 
 static void gen_var_init(Var *vp, uint context, int level)

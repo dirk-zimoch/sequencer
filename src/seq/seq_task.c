@@ -218,7 +218,7 @@ void ss_read_buffer_selective(PROG *sp, SSCB *ss, evflag ev_flag)
 /*
  * ss_write_buffer() - Copy given value and meta data
  * to shared buffer. In safe mode, if dirtify is TRUE then
- * set dirty flag for each state set.
+ * set dirty flag for each state set that has a monitor on the channel.
  */
 void ss_write_buffer(CHAN *ch, void *val, PVMETA *meta, boolean dirtify)
 {
@@ -246,7 +246,8 @@ void ss_write_buffer(CHAN *ch, void *val, PVMETA *meta, boolean dirtify)
 
 	if (optTest(sp, OPT_SAFE) && dirtify)
 		for (nss = 0; nss < sp->numSS; nss++)
-			sp->ss[nss].dirty[nch] = TRUE;
+			if (sp->ss[nss].monitored[nch])
+				sp->ss[nss].dirty[nch] = TRUE;
 
 	epicsMutexUnlock(ch->varLock);
 }

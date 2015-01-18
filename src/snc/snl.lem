@@ -330,10 +330,10 @@ state_defns(r) ::= state_defns(xs) state_defn(x). {
 }
 state_defns(r) ::= .				{ r = 0; }
 
-state_defn(r) ::= assign(x).			{ r = x; }
-state_defn(r) ::= monitor(x).			{ r = x; }
-state_defn(r) ::= sync(x).			{ r = x; }
-state_defn(r) ::= syncq(x).			{ r = x; }
+//state_defn(r) ::= assign(x).			{ r = x; }
+//state_defn(r) ::= monitor(x).			{ r = x; }
+//state_defn(r) ::= sync(x).			{ r = x; }
+//state_defn(r) ::= syncq(x).			{ r = x; }
 state_defn(r) ::= declaration(x).		{ r = x; }
 state_defn(r) ::= option(x).			{ r = x; }
 

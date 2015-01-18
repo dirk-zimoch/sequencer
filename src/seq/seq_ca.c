@@ -53,9 +53,7 @@ pvStat seq_connect(PROG *sp, boolean wait)
 	int		delay = 2.0;
 	boolean		ready = FALSE;
 
-	/*
-	 * For each channel: create pv object, then subscribe if monitored.
-	 */
+	/* for each channel: create pv object */
 	for (nch = 0; nch < sp->numChans; nch++)
 	{
 		CHAN *ch = sp->chan + nch;
@@ -63,7 +61,7 @@ pvStat seq_connect(PROG *sp, boolean wait)
 
 		if (dbch == NULL)
 			continue; /* skip records without pv names */
-		DEBUG("seq_connect: connect %s to %s\n", ch->varName,
+		DEBUG("seq_connect: trying to connect %s to %s\n", ch->varName,
 			dbch->dbName);
 		/* Connect to it */
 		status = pvVarCreate(
@@ -81,6 +79,7 @@ pvStat seq_connect(PROG *sp, boolean wait)
 			free(ch->dbch);
 			continue;
 		}
+		DEBUG("seq_connect: connected %s to %s\n", ch->varName, dbch->dbName);
 	}
 	pvSysFlush(sp->pvSys);
 
@@ -300,7 +299,8 @@ static void proc_db_events(
 			}
 
 			/* Write value and meta data to shared buffers.
-			   Set the dirty flag only if this was a monitor event. */
+			   Set the dirty flag only if this was a monitor event
+			   AND state set has the monitored flag set for this channel. */
 			ss_write_buffer(ch, val, &meta, evtype == pvEventMonitor);
 		}
 	}
@@ -431,7 +431,7 @@ void seq_conn_handler(int connected, void *arg)
 			dbch->connected = FALSE;
 			sp->connectCount--;
 
-			if (ch->monitored)
+			if (dbch->monitored)
 			{
 				seq_camonitor(ch, FALSE);
 			}
@@ -472,7 +472,7 @@ void seq_conn_handler(int connected, void *arg)
 			assert(dbCount >= 0);
 			dbch->dbCount = min(ch->count, (unsigned)dbCount);
 
-			if (ch->monitored)
+			if (dbch->monitored)
 			{
 				seq_camonitor(ch, TRUE);
 			}

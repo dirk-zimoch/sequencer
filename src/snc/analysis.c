@@ -811,7 +811,7 @@ uint eval_subscript(Node *expr, uint num_elems, uint *pindex)
 	return TRUE;
 }
 
-static ChanNode *traverse_var_expr(SymTable st, Node *scope, Node *vxp, const char *what)
+static ChanNode *traverse_var_expr(SymTable st, Node *scope, Node *vxp, const char *what, uint same_scope)
 {
 	Type *t;
 	Var *vp;
@@ -832,7 +832,7 @@ static ChanNode *traverse_var_expr(SymTable st, Node *scope, Node *vxp, const ch
 			return 0;
 		}
 		vxp->extra.e_var = vp;
-		if (vp->scope != scope)
+		if (same_scope && vp->scope != scope)
 		{
 			error_at_node(vxp, "cannot %s variable '%s': "
 				"%s must be in the same scope as declaration\n", what, var_name, what);
@@ -849,7 +849,7 @@ static ChanNode *traverse_var_expr(SymTable st, Node *scope, Node *vxp, const ch
 #endif
 		return vp->chan;
 	case E_SUBSCR:
-		chan_node = traverse_var_expr(st, scope, vxp->subscr_operand, what);
+		chan_node = traverse_var_expr(st, scope, vxp->subscr_operand, what, same_scope);
 		if (!chan_node)
 			return 0;
 #ifdef DEBUG
@@ -874,7 +874,7 @@ static ChanNode *traverse_var_expr(SymTable st, Node *scope, Node *vxp, const ch
 			return 0;
 		return chan_node->val.nodes[index];
 	case E_SELECT:
-		chan_node = traverse_var_expr(st, scope, vxp->select_left, what);
+		chan_node = traverse_var_expr(st, scope, vxp->select_left, what, same_scope);
 		if (!chan_node)
 			return 0;
 		t = chan_node->type;
@@ -1024,7 +1024,7 @@ static void analyse_assign(SymTable st, ChanList *chan_list, Node *scope, Node *
 	dump_channel_node(vp->chan, 1);
 #endif
 
-	chan_node = traverse_var_expr(st, scope, vxp, "assign");
+	chan_node = traverse_var_expr(st, scope, vxp, "assign", TRUE);
 	if (!chan_node)
 		return;
 	*chan_node = *build_channel_tree(chan_list, 0, chan_node, chan_node->type, vxp, ixp);
@@ -1077,9 +1077,16 @@ uint traverse_channel_tree(
 
 static uint monitor_iteratee(Chan *chan, void *env)
 {
-	if (chan->monitor)
-		return TRUE;
-	chan->monitor = TRUE;
+	Node *scope = (Node *)env;
+	Monitor *mon;
+
+	foreach (mon, chan->monitor)
+		if (mon->scope == scope || mon->scope->tag == D_PROG)
+			return TRUE;
+	mon = new(Monitor);
+	mon->scope = scope;
+	mon->next = chan->monitor;
+	chan->monitor = mon;
 	return FALSE;
 }
 
@@ -1097,10 +1104,10 @@ static void analyse_monitor(SymTable st, Node *scope, Node *defn)
 	report(";\n");
 #endif
 
-	chan_node = traverse_var_expr(st, scope, defn->monitor_expr, "monitor");
+	chan_node = traverse_var_expr(st, scope, defn->monitor_expr, "monitor", FALSE);
 	if (!chan_node)
 		return;
-	if (traverse_channel_tree(chan_node, monitor_iteratee, 0, 0))
+	if (traverse_channel_tree(chan_node, monitor_iteratee, 0, scope))
 	{
 		warning_at_node(defn, "expression or parts of it are already monitored\n");
 	}
@@ -1147,7 +1154,7 @@ static void analyse_sync(SymTable st, Node *scope, Node *defn)
 	report(";\n");
 #endif
 
-	chan_node = traverse_var_expr(st, scope, defn->sync_expr, "sync");
+	chan_node = traverse_var_expr(st, scope, defn->sync_expr, "sync", TRUE);
 	if (!chan_node)
 		return;
 	if (traverse_channel_tree(chan_node, sync_iteratee, 0, evp))
@@ -1213,7 +1220,7 @@ static void analyse_syncq(SymTable st, SyncQList *syncq_list, Node *scope, Node 
 	report(";\n");
 #endif
 
-	chan_node = traverse_var_expr(st, scope, defn->syncq_expr, "syncq");
+	chan_node = traverse_var_expr(st, scope, defn->syncq_expr, "syncq", TRUE);
 	if (!chan_node)
 		return;
 
@@ -1476,7 +1483,7 @@ static uint connect_states(SymTable st, Node *prog)
 #endif
 			}
 		}
-		num_ss++;
+		ssp->extra.e_ss->index = num_ss++;
 	}
 	return num_ss;
 }

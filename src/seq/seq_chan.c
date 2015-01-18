@@ -43,7 +43,6 @@ epicsShareFunc CH_ID seq_pvCreate(
     PTYPE       varType,        /* variable (base) type */
     unsigned    count,          /* element count for arrays */
     evflag      ef,             /* event flag if synced */
-    seqBool     monitored,      /* whether channel should be monitored */
     unsigned    queueSize,      /* queue size (0=not queued) */
     unsigned    queueIndex)     /* queue index */
 {
@@ -62,7 +61,6 @@ epicsShareFunc CH_ID seq_pvCreate(
     if (ch->syncedTo) {
         bitSet(ef->synced, chNum);
     }
-    ch->monitored = monitored;
     ch->eventNum = sp->numEvFlags + chNum + 1;
 
     /* Fill in request type info */
@@ -87,8 +85,6 @@ epicsShareFunc CH_ID seq_pvCreate(
             }
             ch->dbch = dbch;
             sp->assignCount++;
-            if (ch->monitored)
-                sp->monitorCount++;
         }
     }
 
@@ -121,6 +117,23 @@ epicsShareFunc CH_ID seq_pvCreate(
         return NULL;
     }
     return ch;
+}
+
+epicsShareFunc void seq_pvAddMonitor(
+    PROG        *sp,            /* program instance */
+    CH_ID       ch,             /* channel object */
+    unsigned    ssNum)          /* state set number */
+{
+    if (ssNum < sp->numSS) {
+        sp->ss[ssNum].monitored[ch - sp->chan] = TRUE;
+    } else {    /* monitor for all state sets */
+        for (ssNum=0; ssNum < sp->numSS; ssNum++)
+            sp->ss[ssNum].monitored[ch - sp->chan] = TRUE;
+    }
+    if (ch->dbch) {
+        ch->dbch->monitored = TRUE;
+        sp->monitorCount++;
+    }
 }
 
 epicsShareFunc size_t seq_pvOffset(CH_ID ch)

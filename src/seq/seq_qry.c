@@ -148,6 +148,7 @@ epicsShareFunc void epicsShareAPI seqChanShow(epicsThreadId tid, const char *str
 	{
 		CHAN *ch = sp->chan + nch;
 		DBCHAN *dbch = ch->dbch;
+		unsigned nss;
 
 		if (str != NULL)
 		{
@@ -186,10 +187,14 @@ epicsShareFunc void epicsShareAPI seqChanShow(epicsThreadId tid, const char *str
 		else
 			printf("  Not connected\n");
 
-		if (ch->monitored)
-			printf("  Monitored\n");
-		else
-			printf("  Not monitored\n");
+		printf("  Monitored in: ");
+		for (nss = 0; nss < sp->numSS; nss++)
+		{
+			SSCB *ss = sp->ss + nss;
+			if (ss->monitored[chNum(ch)])
+				printf("%s%s", nss? ", " : "[", ss->ssName);
+		}
+		printf("]\n");
 
 		if (ch->syncedTo)
 			printf("  Sync'ed to event flag %u\n", (unsigned)(ch->syncedTo - sp->eventFlags));

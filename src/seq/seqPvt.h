@@ -103,7 +103,6 @@ struct channel
 	DBCHAN		*dbch;		/* channel assigned to a named db pv */
 	evflag		syncedTo;	/* event flag id if synced */
 	QUEUE		queue;		/* queue if queued */
-	boolean		monitored;	/* whether channel is monitored */
 	/* buffer access, only used in safe mode */
 	epicsMutexId	varLock;	/* mutex for locking access to shared
 					   var buffer and meta data */
@@ -133,6 +132,7 @@ struct db_channel
 	pvVar		pvid;		/* PV (process variable) id */
 	unsigned	dbCount;	/* actual count for db access */
 	boolean		connected;	/* whether channel is connected */
+	boolean		monitored;	/* whether channel should be monitored */
 	boolean		gotMonitor;	/* whether we got a monitor after connect */
 	PVMETA		metaData;	/* meta data (shared buffer) */
 };
@@ -161,6 +161,7 @@ struct state_set
 	PVREQ		**getReq;	/* currently pending get requests */
 	PVREQ		**putReq;	/* currently pending put requests */
 	PVMETA		*metaData;	/* meta data (safe mode) */
+	boolean		*monitored;	/* whether channel is monitored */
 	/* safe mode */
 	boolean		*dirty;		/* array of flags, one for each channel */
 };
