@@ -242,7 +242,6 @@ snl:
 	"enum"		{ TYPEWORD(ENUM,	"enum"); }
 	"evflag"	{ TYPEWORD(EVFLAG,	"evflag"); }
 	"exit"		{ KEYWORD(EXIT,		"exit"); }
-	"extern"	{ KEYWORD(EXTERN,	"extern"); }
 	"float"		{ TYPEWORD(FLOAT,	"float"); }
 	"for"		{ KEYWORD(FOR,		"for"); }
 	"foreign"	{ TYPEWORD(FOREIGN,	"foreign"); }

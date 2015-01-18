@@ -498,9 +498,6 @@ member(r) ::= NAME(t).				{ r = node(E_MEMBER, t); }
 funcdef(r) ::= basetype(t) declarator(d) block(b). {
 	r = node(D_FUNCDEF, d->token, mk_decl(d, t), b);
 }
-funcdef(r) ::= EXTERN(k) basetype(t) declarator(d) block(b). {
-	r = node(D_FUNCDEF, k, mk_decl(d, t), b);
-}
 
 // Struct Definitions
 
