@@ -7,9 +7,7 @@ use Test::More;
 my $tests = {
   cast                    => { warnings => 0, errors => 0  },
   delay_in_action         => { warnings => 0, errors => 1  },
-  efArray                 => { warnings => 0, errors => 1  },
   efGlobal                => { warnings => 0, errors => 3  },
-  efPointer               => { warnings => 0, errors => 1  },
   exOpt_UnrecOpt          => { warnings => 1, errors => 0  },
   foreignGlobal           => { warnings => 1, errors => 3  },
   foreignNoInit           => { warnings => 0, errors => 1  },
