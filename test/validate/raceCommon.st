@@ -24,8 +24,6 @@ entry {
 }
 
 ss race1 {
-    string z;
-    assign z to "";
     state init {
         when () {
             x[0] = 0;
@@ -48,8 +46,7 @@ ss race1 {
             }
         } state wait
         when ( (x[0] && x[1] && x[0] != x[1])
-            || (y[0] && y[1] && y[0] != y[1])
-            || (z[0] && z[1] && z[0] != z[1]) ) {
+            || (y[0] && y[1] && y[0] != y[1]) ) {
             /* this should never be executed */
             testFail("%c/%c",x[0],x[1]);
         } state wait
