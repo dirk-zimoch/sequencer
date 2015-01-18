@@ -8,36 +8,35 @@ program arrayTest
 
 %%#include "../testSupport.h"
 
+#define H 2
+#define W 3
+
 entry {
-    seq_test_init(20);
+    seq_test_init(H*W);
 }
 
 ss array {
-    string a4a5s[4][5] = {
-        { "00", "01", "02", "03", "04" },
-        { "10", "11", "12", "13", "14" },
-        { "20", "21", "22", "23", "24" },
-        { "30", "31", "32", "33", "34" }
+    string aas[H][W] = {
+        { "00", "01", "02" },
+        { "10", "11", "12" }
     };
-    assign a4a5s to {};
+    assign aas to {};
     state init {
-        string (*a4ps[4])[5] = {
-            &a4a5s[0],
-            &a4a5s[1],
-            &a4a5s[2],
-            &a4a5s[3]
+        string (*aps[H])[W] = {
+            &aas[0],
+            &aas[1]
         };
         when () {
             int i, j;
-            for (i = 0; i < 4; i++) {
-                for (j = 0; j < 5; j++) {
-                    testOk(a4a5s[i][j] == (*a4ps[i])[j],
-                        "a4a5s[%d][%d]=%s==%s=(*a4ps[%d])[%d])",
-                        i, j, a4a5s[i][j], (*a4ps[i])[j], i, j);
+            for (i = 0; i < H; i++) {
+                for (j = 0; j < W; j++) {
+                    testOk(aas[i][j] == (*aps[i])[j],
+                        "aas[%d][%d]=%s==%s=(*aps[%d])[%d])",
+                        i, j, aas[i][j], (*aps[i])[j], i, j);
                 }
             }
-            for (i = 0; i < 4; i++) {
-                testDiag("a4ps[%d]=%p", i, a4ps[i]);
+            for (i = 0; i < H; i++) {
+                testDiag("aps[%d]=%p", i, aps[i]);
             }
         } exit
     }
