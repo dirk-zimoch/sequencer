@@ -13,6 +13,7 @@ my $tests = {
   foreignNoInit           => { warnings => 0, errors => 1  },
   foreignTypes            => { warnings => 1, errors => 0  },
   funcdefShadowGlobal     => { warnings => 0, errors => 1  },
+  funcdefShadowBuiltin    => { warnings => 0, errors => 1  },
   misplacedExit           => { warnings => 0, errors => 1  },
   namingConflict          => { warnings => 0, errors => 0  },
   nesting_depth           => { warnings => 0, errors => 0  },
@@ -26,6 +27,7 @@ my $tests = {
   syncq_not_assigned      => { warnings => 0, errors => 1  },
   syncq_size_out_of_range => { warnings => 0, errors => 1  },
   type_not_allowed        => { warnings => 3, errors => 10 },
+  varShadowBuiltin        => { warnings => 0, errors => 1  },
 };
 
 my @progs = sort(keys(%$tests));
