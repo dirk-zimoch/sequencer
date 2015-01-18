@@ -1406,60 +1406,6 @@ static void connect_variables(SymTable st, Node *scope)
 #endif
 }
 
-void traverse_syntax_tree(
-	Node		*ep,		/* start node */
-	NodeMask	call_mask,	/* when to call iteratee */
-	NodeMask	stop_mask,	/* when to stop descending */
-	Node		*scope,		/* current scope, 0 at top-level */
-	node_iter	*iteratee,	/* function to call */
-	void		*parg		/* argument to pass to function */
-)
-{
-	Node	*cep;
-	uint	i;
-	int	descend = TRUE;
-
-	if (!ep)
-		return;
-
-#ifdef DEBUG
-	report("traverse_syntax_tree(tag=%s,token.str=%s)\n",
-		node_name(ep), ep->token.str);
-#endif
-
-	/* Call the function? */
-	if (call_mask & bit(ep->tag))
-	{
-		descend = iteratee(ep, scope, parg);
-	}
-
-	if (!descend)
-		return;
-
-	/* Are we just entering a new scope? */
-	if (is_scope(ep))
-	{
-#ifdef DEBUG
-	report("traverse_syntax_tree: new scope=(%s,%s)\n",
-		node_name(ep), ep->token.str);
-#endif
-		scope = ep;
-	}
-
-	/* Descend into children */
-	for (i = 0; i < node_info[ep->tag].num_children; i++)
-	{
-		foreach (cep, ep->children[i])
-		{
-			if (!(bit(cep->tag) & stop_mask))
-			{
-				traverse_syntax_tree(cep, call_mask, stop_mask,
-					scope, iteratee, parg);
-			}
-		}
-	}
-}
-
 /* Check for duplicate state set and state names and resolve transitions between states */
 static uint connect_states(SymTable st, Node *prog)
 {
