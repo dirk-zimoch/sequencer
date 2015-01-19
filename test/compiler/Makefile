@@ -32,7 +32,6 @@ TESTPROD_HOST += funcdef
 TESTPROD_HOST += include_windows_h
 TESTPROD_HOST += member
 TESTPROD_HOST += namingConflict
-TESTPROD_HOST += pv_and_assign
 TESTPROD_HOST += pv_init_expr
 TESTPROD_HOST += subscript
 TESTPROD_HOST += sync_not_monitored
