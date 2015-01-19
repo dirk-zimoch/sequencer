@@ -137,20 +137,13 @@ static void gen_func_decls(Node *prog)
 static void gen_var_and_pv_decl(Var *vp, int level)
 {
 	/* C variable declaration */
-#if 0
-	if (vp->type->tag != T_POINTER || !type_contains_pv(vp->type))
-	{
-#endif
-		gen_line_marker(vp->decl);
-		if (level)
-			indent(level);
-		else
-			gen_code("static ");
-		gen_var_decl(vp);
-		gen_code(";\n");
-#if 0
-	}
-#endif
+	gen_line_marker(vp->decl);
+	if (level)
+		indent(level);
+	else
+		gen_code("static ");
+	gen_var_decl(vp);
+	gen_code(";\n");
 
 	/* channel declaration */
 	if (type_contains_pv(vp->type))
