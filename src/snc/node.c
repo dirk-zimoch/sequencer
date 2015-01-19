@@ -287,3 +287,20 @@ Node *mk_string_node(Node *other, char *s)
 	k.str = s;
 	return node(E_STRING, k);
 }
+
+void dump_node(Node *e, int level)
+{
+    int i, l;
+    for (l = 0; l < level; l++) report("  ");
+    if (e) {
+        Node *ce;
+        report("%s '%s'\n", node_name(e), e->token.str);
+        for (i = 0; i < node_info[e->tag].num_children; i++) {
+            foreach (ce, e->children[i]) {
+                dump_node(ce, level+1);
+            }
+        }
+    } else {
+        report("***NULL***\n");
+    }
+}

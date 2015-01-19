@@ -73,4 +73,6 @@ Node *mk_select_node(Node *operand, char *name);
 Node *mk_var_node(Var *vp);
 Node *mk_string_node(Node *other, char *s);
 
+void dump_node(Node *e, int level);
+
 #endif	/*INCLparseh*/

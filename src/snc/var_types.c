@@ -553,7 +553,7 @@ Type *base_type(Type *t)
         return t;
 }
 
-void dump_expr(Node *e, int level);
+void dump_node(Node *e, int level);
 
 /* Note: this function does intentionally *not* consider struct members */
 Type *type_contains_pv(Type *t)

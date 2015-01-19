@@ -20,6 +20,7 @@ in the file LICENSE that is included with this distribution.
 #include "snl.h"
 #include "types.h"
 #include "var_types.h"
+#include "node.h"
 #include "type_check.h"
 
 static const int impossible = FALSE;
@@ -29,23 +30,6 @@ static const int impossible = FALSE;
 #define char_type   mk_prim_type(P_CHAR)
 #define no_type     mk_no_type()
 
-
-void dump_expr(Node *e, int level)
-{
-    int i, l;
-    for (l = 0; l < level; l++) report("  ");
-    if (e) {
-        Node *ce;
-        report("%s '%s'\n", node_name(e), e->token.str);
-        for (i = 0; i < node_info[e->tag].num_children; i++) {
-            foreach (ce, e->children[i]) {
-                dump_expr(ce, level+1);
-            }
-        }
-    } else {
-        report("***NULL***\n");
-    }
-}
 
 static Type *member_type(Node *members, const char *name)
 {
@@ -67,7 +51,7 @@ Type *type_of(Node *e)
 
 #ifdef DEBUG
     report("type_of()\n");
-    dump_expr(e, 1);
+    dump_node(e, 1);
 #endif
 
     if (e->type)
@@ -196,7 +180,7 @@ Type *type_of(Node *e)
             return e->type = num_type;
 #endif
         default:
-            dump_expr(e, 0);
+            dump_node(e, 0);
             assert(impossible);
         }
     case E_SELECT:                      /* member selection [left,right] */
@@ -214,7 +198,7 @@ Type *type_of(Node *e)
             else
                 return e->type = no_type;
         default:
-            dump_expr(e, 0);
+            dump_node(e, 0);
             assert(impossible);
             return e->type = no_type;
         }

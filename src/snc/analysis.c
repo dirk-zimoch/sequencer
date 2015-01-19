@@ -486,9 +486,9 @@ ChanNode *build_channel_tree(
 	report("build_channel_tree:\n  type=\n");
 	dump_type(type, 2);
 	report("  vxp=\n");
-	dump_expr(vxp, 2);
+	dump_node(vxp, 2);
 	report("  ixp=\n");
-	dump_expr(ixp, 2);
+	dump_node(ixp, 2);
 #endif
 
 	if (!pv_init && ixp && ixp->tag == E_PRE && ixp->token.symbol == TOK_PV)

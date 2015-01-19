@@ -12,6 +12,5 @@ in the file LICENSE that is included with this distribution.
 
 /* return an approximation of the type of an expression */
 Type *type_of(Node *e);
-void dump_expr(Node *e, int level);
 
 #endif /*INCLtype_checkh */

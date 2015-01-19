@@ -502,7 +502,7 @@ static void gen_func_args(uint context, Type *ft, Node *ep)
 
 #ifdef DEBUG
 		report("gen_func_args() function:\n");
-		dump_expr(ep, 1);
+		dump_node(ep, 1);
 #endif
 
 		assert(ft->tag == T_FUNCTION);	/* invariant */
@@ -526,7 +526,7 @@ static void gen_func_args(uint context, Type *ft, Node *ep)
 			if (ap)
 			{
 #ifdef DEBUG
-				dump_expr(ap, 1);
+				dump_node(ap, 1);
 #endif
 				gen_expr(context, pt, ap, 0);
 				ap = ap->next;
@@ -535,7 +535,7 @@ static void gen_func_args(uint context, Type *ft, Node *ep)
 			{
 				/* we have a default for the parameter */
 #ifdef DEBUG
-				dump_expr(pd->decl_init, 1);
+				dump_node(pd->decl_init, 1);
 #endif
 				gen_expr(ctxSet(context,C_STATIC), pt, pd->decl_init, 0);
 			}
@@ -567,7 +567,7 @@ static void gen_expr(
 
 #ifdef	DEBUG
 	report("gen_expr()\n");
-	dump_expr(ep,1);
+	dump_node(ep,1);
 #endif
 
 	inferred = type_of(ep);
@@ -667,7 +667,7 @@ static void gen_expr(
 	case E_ASSOP:
 #ifdef DEBUG
 		report("gen_expr(E_ASSOP)\n");
-		dump_expr(ep,1);
+		dump_node(ep,1);
 #endif
 		if (ctxTest(context,C_STATIC))
 			error_at_node(ep, "assignment operator not allowed here\n");
@@ -714,7 +714,7 @@ static void gen_expr(
 	case E_PRE:
 		if (ep->token.symbol == TOK_PV)
 		{
-			dump_expr(ep, 0);
+			dump_node(ep, 0);
 			assert(impossible);
 			break;
 		}
@@ -751,7 +751,7 @@ static void gen_expr(
 				gen_expr(ctxClear(context, C_STATIC), expected, ep->pre_operand, level);
 			break;
 		default:
-			dump_expr(ep, 0);
+			dump_node(ep, 0);
 			assert(impossible);
 		}
 		break;
@@ -827,7 +827,7 @@ static void gen_channel_init(uint context, Chan *cp)
 
 #ifdef DEBUG
 	report("gen_channel_init: cp->expr=\n");
-	dump_expr(cp->expr,1);
+	dump_node(cp->expr,1);
 	report("gen_channel_init: type_of(cp->expr)=\n");
 	dump_type(type_of(cp->expr), 1);
 #endif
