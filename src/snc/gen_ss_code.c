@@ -166,7 +166,7 @@ void gen_ss_code(uint context, Node *prog, ChanList *channels, EvFlagList *event
 	if (prog->prog_exit)
 		gen_prog_entex_func(context, prog, "exit", NM_EXIT, gen_prog_exit_body);
 
-	gen_code("#undef " NM_VAR);
+	gen_code("#undef " NM_VAR "\n");
 }
 
 static void gen_state_func(
@@ -1026,6 +1026,6 @@ void gen_funcdef(uint context, Node *fp)
 		gen_block(ctxSet(context,C_FUNC),
 			vp->type->val.function.return_type,
 			fp->funcdef_block, 0);
-		gen_code("#undef " NM_VAR);
+		gen_code("#undef " NM_VAR "\n");
 	}
 }
