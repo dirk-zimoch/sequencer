@@ -68,4 +68,9 @@ void traverse_syntax_tree(
 	void		*parg		/* argument to pass to function */
 );
 
+Node *mk_subscr_node(Node *operand, uint n);
+Node *mk_select_node(Node *operand, char *name);
+Node *mk_var_node(Var *vp);
+Node *mk_string_node(Node *other, char *s);
+
 #endif	/*INCLparseh*/

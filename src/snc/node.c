@@ -21,6 +21,7 @@ in the file LICENSE that is included with this distribution.
 #include "node.h"
 #include "main.h"
 #include "var_types.h"
+#include "snl.h"
 
 static const int impossible = 0;
 
@@ -225,4 +226,64 @@ void traverse_syntax_tree(
 			}
 		}
 	}
+}
+
+static Node *mk_const_node(Node *other, uint n)
+{
+	static char buf[21];	/* long enough for a 64 bit unsigned in decimal */
+	Token k = other->token;
+
+	k.symbol = TOK_INTCON;
+	sprintf(buf, "%u", n);
+	k.str = strdup(buf);
+	return node(E_CONST, k);
+}
+
+Node *mk_subscr_node(Node *operand, uint n)
+{
+	Token k = operand->token;
+
+	k.symbol = TOK_LBRACKET;
+	k.str = "[";
+	return node(E_SUBSCR, k, operand, mk_const_node(operand, n));
+}
+
+static Node *mk_member_node(Node *other, char *name)
+{
+	Token k = other->token;
+
+	k.symbol = TOK_NAME;
+	k.str = name;
+	return node(E_MEMBER, k);
+}
+
+Node *mk_select_node(Node *operand, char *name)
+{
+	Token k = operand->token;
+
+	k.symbol = TOK_PERIOD;
+	k.str = ".";
+	return node(E_SELECT, k, operand, mk_member_node(operand, name));
+}
+
+Node *mk_var_node(Var *vp)
+{
+	Token k;
+	Node *r;
+
+	assert(vp->decl);
+	k = vp->decl->token;
+	k.symbol = TOK_NAME;
+	k.str = vp->name;
+	r = node(E_VAR, k);
+	r->extra.e_var = vp;
+	return r;
+}
+
+Node *mk_string_node(Node *other, char *s)
+{
+	Token k = other->token;
+	k.symbol = TOK_STRCON;
+	k.str = s;
+	return node(E_STRING, k);
 }
