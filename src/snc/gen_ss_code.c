@@ -924,7 +924,7 @@ static void gen_init(uint context, Type *expected, Node *tgt, Node *ixp, int lev
 			}
 			else
 			{
-				warning_at_node(ixp, "not initialising foreign struct members\n");
+				extra_warning_at_node(ixp, "not initialising foreign struct members\n");
 			}
 		}
 		if (cixp)

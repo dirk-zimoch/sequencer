@@ -158,6 +158,19 @@ static void gen_var_and_pv_decl(Var *vp, int level)
 	}
 }
 
+uint count_c_decls(VarList *var_list)
+{
+	Var	*vp;
+	uint	cnt = 0;
+
+	foreach (vp, var_list->first)
+	{
+		if (vp->decl && vp->type->tag != T_NONE && vp->type->tag != T_FUNCTION)
+			cnt++;
+	}
+	return cnt;
+}
+
 /* Generate the struct containing all program variables with
    'infinite' (global) lifetime. These are: variables declared at the
    top-level, inside a state set, and inside a state. Note that state
@@ -170,12 +183,13 @@ static void gen_var_struct(Node *prog, uint opt_reent)
 	Var	*vp;
 	Node	*sp, *ssp;
 	int	level = opt_reent;
+	uint	num_globals;
 
 	gen_code("\n/* Variable declarations */\n");
+	num_globals = count_c_decls(var_list_from_scope(prog));
 	if (opt_reent)
 	{
 		gen_code("struct %s {\n", NM_VARS);
-		indent(1); gen_code("char "NM_DUMMY";\n");
 	}
 	foreach (vp, var_list_from_scope(prog)->first)
 	{
@@ -184,27 +198,41 @@ static void gen_var_struct(Node *prog, uint opt_reent)
 	}
 	foreach (ssp, prog->prog_statesets)
 	{
-		indent(level);
-		if (!opt_reent)
-			gen_code("static ");
-		gen_code("struct %s_%s {\n", NM_VARS, ssp->token.str);
-		indent(level+1); gen_code("char "NM_DUMMY";\n");
-		foreach (vp, ssp->extra.e_ss->var_list->first)
-			gen_var_and_pv_decl(vp, level+1);
+		uint num_ss_locals = count_c_decls(ssp->extra.e_ss->var_list);
 		foreach (sp, ssp->ss_states)
+			num_ss_locals += count_c_decls(sp->extra.e_state->var_list);
+		if (num_ss_locals > 0)
 		{
-			indent(level+1); gen_code("struct {\n");
-			indent(level+2); gen_code("char "NM_DUMMY";\n");
-			foreach (vp, sp->extra.e_state->var_list->first)
-				gen_var_and_pv_decl(vp, level+2);
-			indent(level+1);
-			gen_code("} %s_%s;\n", NM_VARS, sp->token.str);
+			indent(level);
+			if (!opt_reent)
+				gen_code("static ");
+			gen_code("struct %s_%s {\n", NM_VARS, ssp->token.str);
+			foreach (vp, ssp->extra.e_ss->var_list->first)
+				gen_var_and_pv_decl(vp, level+1);
+			foreach (sp, ssp->ss_states)
+			{
+				uint num_s_locals = count_c_decls(sp->extra.e_state->var_list);
+				if (num_s_locals > 0)
+				{
+					indent(level+1); gen_code("struct {\n");
+					foreach (vp, sp->extra.e_state->var_list->first)
+						gen_var_and_pv_decl(vp, level+2);
+					indent(level+1);
+					gen_code("} %s_%s;\n", NM_VARS, sp->token.str);
+				}
+			}
+			indent(level); gen_code("} %s_%s", NM_VARS, ssp->token.str);
+			gen_code(";\n");
 		}
-		indent(level); gen_code("} %s_%s", NM_VARS, ssp->token.str);
-		gen_code(";\n");
 	}
 	if (opt_reent)
+	{
+		if (num_globals == 0)
+		{
+			indent(1); gen_code("char "NM_DUMMY";\n");
+		}
 		gen_code("};\n");
+	}
 	gen_code("\n");
 }
 
