@@ -1,0 +1,75 @@
+Release Notes for Version 2.3
+=============================
+
+.. _Release_Notes_2.3.0.1:
+
+Release 2.3.0.1
+---------------
+
+This is a preliminary first (pre-)release on the version 2.3 branch. Its
+mauin purpose is to give a first impression of some of the new features you
+can expect in version 2.3.
+
+Here is a short overview of what's new:
+
+PV Type Constructor and Initializer
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+As stated for some time in the `Plans` chapter, SNL now makes a type
+distinction between normal variables and channel variables. This is done by
+the addition of a new "pv" keyword. In type expressions, "pv" acts like a
+type constructor; syntactically, it behaves just like other type
+constructors in SNL and C, such as "*". Here is an example::
+
+  int *p;
+  int pv x;
+
+Just as prefix "*" means "pointer", prefix "pv" means "channel" i.e.
+"assigned variable". As usual in C and SNL, type expressions have to be read
+inside out, starting with the declared variable; in this case: p is a
+pointer to an int, and x is a pv of value type int.
+
+For anonymous channels, this is all you need to do: no separate "assign"
+clause is necessary. For named channels, we overload the variable
+initialization syntax::
+
+  int pv x = pv "{DEV}:stat1";
+
+Where the "pv" keyword on the right of the "=" indicates that the
+initializer is not meant to initialize the value but the channel.
+
+This declaration is equivalent to the old (and still supported) notation::
+
+  int x;
+  assign x to "{DEV}:stat1";
+
+The "pv" type constructor and the "pv" initializer can both appear nested
+inside more complicated expressions. For instance, ::
+
+  double (pv x)[5];
+
+declares variable ``x`` as having type "pv of array of 5 doubles". Note the
+parentheses to bind the "pv" tighter to x than the array brackets (which
+would otherwise have higher precedence like all postfix operators). Leaving
+the parantzheses off, as in::
+
+  double pv x[5];
+
+means x has type "array of 5 pv of double".
+
+Structs can have members of pv type, too::
+
+  struct mixing_pv_and_plain_in_struct {
+    int plain_int;
+    int pv pv_of_int;
+    double pv array_of_3_pv_of_double[3];
+  };
+
+When declaring a variable of this type, you may interleave normal value
+initialization with pv initialization, as in ::
+
+  struct mixing_pv_and_plain_in_struct contrived = {
+    42,
+    pv "{DEV}:stat",
+    pv { "{DEV}:readback1", "{DEV}:readback2", "{DEV}:readback3" }
+  };
