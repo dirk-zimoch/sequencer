@@ -2,8 +2,6 @@ program structdefTest
 
 %%#include "../testSupport.h"
 
-option +W;
-
 %%#include <stdlib.h>
 
 struct limits {
@@ -27,15 +25,16 @@ void test_array(double *v, double *w, int n);
 void test_mystruct(struct mystruct *p);
 }%
 
-struct mystruct s = { "xxx", {0.0,1.1,2.2,3.3,4.4}, {-8,+8}, {-10,+10}, 0.01, test_mystruct, {&s,&s}, 0};
+struct mystruct s = { "xxx", {0.0,1.1,2.2,3.3,4.4}, {-8,+8}, {-10,+10}, 0.01, /* test_mystruct, */ {&s,&s}, 0};
 
 entry {
     struct mystruct *ps = *(&s.children[0]+1);
 
     seq_test_init(24);
 
-    if (s.process)
-        s.process(ps);
+    s.process = test_mystruct;
+
+    s.process(ps);
     ps->children[1]->process(ps->children[0]);
 }
 

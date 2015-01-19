@@ -2,8 +2,6 @@ program functionInStructTest
 
 %%#include "../testSupport.h"
 
-option +W;
-
 %%#include <stdlib.h>
 
 struct mystruct {
@@ -16,7 +14,7 @@ struct mystruct {
 };
 
 int hilo = 33;
-struct mystruct s = { 42.23, &hilo, &hilo, mycfun, myfun, {&s,&s,&s}};
+struct mystruct s = { 42.23, &hilo, &hilo, /* mycfun, */ myfun, {&s,&s,&s}};
 
 %{
 void mycfun(struct mystruct *p);
@@ -29,6 +27,7 @@ entry {
 
     myfun(ps);
     ps->fun(ps);
+    s.cfun = mycfun;
     s.fun(ps);
     if (s.cfun)
         s.cfun(ps);
