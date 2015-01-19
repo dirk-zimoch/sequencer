@@ -5,6 +5,7 @@ use strict;
 use Test::More;
 
 my $tests = {
+  assign_to_void_pv       => { warnings => 0, errors => 1  },
   cast                    => { warnings => 0, errors => 0  },
   delay_in_action         => { warnings => 0, errors => 0  },
   efGlobal                => { warnings => 0, errors => 1  },
@@ -28,6 +29,7 @@ my $tests = {
   syncq_size_out_of_range => { warnings => 0, errors => 1  },
   type_not_allowed        => { warnings => 3, errors => 10 },
   varShadowBuiltin        => { warnings => 0, errors => 1  },
+  void_param              => { warnings => 0, errors => 1  },
 };
 
 my @progs = sort(keys(%$tests));
