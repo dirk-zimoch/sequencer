@@ -236,6 +236,7 @@ struct event_flag
 	EvFlag	*next;			/* link to next event flag in list */
 	uint	index;			/* index in event flag list */
 	Node	*expr;			/* path from variable to this part */
+	Node	*init;			/* init expression */
 };
 
 struct sync_queue

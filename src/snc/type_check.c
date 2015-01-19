@@ -188,6 +188,16 @@ Type *type_of(Node *e)
             return e->type = strip_pv_type(t);
         case TOK_SIZEOF:
             return e->type = num_type;
+#if 0
+        case TOK_PV:    /* pv initializer */
+            /* note: we intentionally do not return a pv type here, because the code that gets
+               generated here is a dummy (zero) initializer and thus shouldn't be wrapped with
+               seq_pvValue() */
+            return e->type = num_type;
+#endif
+        default:
+            dump_expr(e, 0);
+            assert(impossible);
         }
     case E_SELECT:                      /* member selection [left,right] */
         t = type_of(e->select_left);
@@ -204,6 +214,7 @@ Type *type_of(Node *e)
             else
                 return e->type = no_type;
         default:
+            dump_expr(e, 0);
             assert(impossible);
             return e->type = no_type;
         }

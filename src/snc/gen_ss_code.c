@@ -712,6 +712,12 @@ static void gen_expr(
 		gen_expr(context, ep->cast_type->extra.e_decl->type, ep->cast_operand, level);
 		break;
 	case E_PRE:
+		if (ep->token.symbol == TOK_PV)
+		{
+			dump_expr(ep, 0);
+			assert(impossible);
+			break;
+		}
 		gen_code("%s", ep->token.str);
 		switch (ep->token.symbol)
 		{
@@ -744,6 +750,9 @@ static void gen_expr(
 			else
 				gen_expr(ctxClear(context, C_STATIC), expected, ep->pre_operand, level);
 			break;
+		default:
+			dump_expr(ep, 0);
+			assert(impossible);
 		}
 		break;
 	case E_POST:
@@ -775,13 +784,11 @@ static void gen_ef_init(uint context, EvFlag *ef)
 	gen_line_marker(ef->expr);
 	indent(1);
 	gen_expr(context, mk_ef_type(), ef->expr, 0);
-	gen_code(" = seq_efCreate("NM_ENV", %d, FALSE", 1 + ef->index);
-#if 0
+	gen_code(" = seq_efCreate("NM_ENV", %d, ", 1 + ef->index);
 	if (ef->init)
-		gen_expr(context, mk_bool_type(), vp->decl->decl_init, level);
+		gen_expr(context, mk_bool_type(), ef->init, 0);
 	else
 		gen_code("FALSE");
-#endif
 	gen_code(");\n");
 }
 
@@ -887,26 +894,91 @@ static void gen_channel_init(uint context, Chan *cp)
 	}
 }
 
-static void gen_var_init(Var *vp, uint context, int level)
+static void gen_init(uint context, Type *expected, Node *tgt, Node *ixp, int level)
 {
-	assert(vp);
-	assert(vp->decl);
-	if (vp->decl->decl_init)
+	uint i;
+	Node *m, *cixp;
+
+	if (ixp->tag == E_PRE && ixp->token.symbol == TOK_PV)
+		return;
+	switch (expected->tag)
 	{
-		gen_line_marker(vp->decl->decl_init);
+	case T_STRUCT:
+		if (ixp->tag != E_INIT)
+		{
+			error_at_node(ixp, "expected aggregate initialiser\n");
+			return;
+		}
+		cixp = ixp->init_elems;
+		foreach(m, expected->val.structure.member_decls)
+		{
+			if (!cixp)
+			{
+				extra_warning_at_node(ixp, "missing elements in aggregate initialiser\n");
+				return;
+			}
+			if (m->tag == D_DECL)
+			{
+				gen_init(context, m->extra.e_decl->type, mk_select_node(tgt, m->extra.e_decl->name), cixp, level);
+				cixp = cixp ->next;
+			}
+			else
+			{
+				warning_at_node(ixp, "not initialising foreign struct members\n");
+			}
+		}
+		if (cixp)
+		{
+			warning_at_node(cixp, "discarding excess elements in aggregate initialiser");
+		}
+		break;
+	case T_ARRAY:
+		if (ixp->tag != E_INIT)
+		{
+			error_at_node(ixp, "expected aggregate initialiser\n");
+			return;
+		}
+		cixp = ixp->init_elems;
+		for(i=0; i<expected->val.array.num_elems; i++)
+		{
+			if (!cixp)
+			{
+				extra_warning_at_node(ixp, "missing elements in aggregate initialiser\n");
+				return;
+			}
+			gen_init(context, expected->val.array.elem_type, mk_subscr_node(tgt, i), cixp, level);
+			cixp = cixp ->next;
+		}
+		if (cixp)
+		{
+			warning_at_node(cixp, "discarding excess elements in aggregate initialiser");
+		}
+		break;
+	default:
+		gen_line_marker(ixp);
 		indent(level); gen_code("{\n");
 		indent(level);
 		if (ctxTest(context,C_REENT))
+			/* TODO check this, it doesn't feel right */
 			gen_code("static ");
-		gen_type(vp->type, NM_INITVAR, vp->name);
+		gen_type(expected, NM_INITVAR, "");
 		gen_code(" = ");
-		gen_expr(context, strip_pv_type(vp->type), vp->decl->decl_init, level);
+		gen_expr(context, strip_pv_type(expected), ixp, level);
 		gen_code(";\n");
 		indent(level); gen_code("memcpy(&");
-		gen_var_access(context, vp);
-		gen_code(", &" NM_INITVAR "%s, sizeof(" NM_INITVAR "%s));\n",
-			vp->name, vp->name);
+		gen_expr(context, strip_pv_type(expected), tgt, level);
+		gen_code(", &" NM_INITVAR ", sizeof(" NM_INITVAR "));\n");
 		indent(level); gen_code("}\n");
+	}
+}
+
+static void gen_var_init(Var *vp, uint context, int level)
+{
+	assert(vp);
+	if (vp->type->tag != T_EVFLAG && vp->decl && vp->decl->decl_init)
+	{
+		assert(vp->type->tag != T_NONE);	/* syntax */
+		gen_init(ctxSet(context,C_STATIC), vp->type, mk_var_node(vp), vp->decl->decl_init, level);
 	}
 }
 
@@ -920,11 +992,7 @@ static void gen_user_var_init(uint context, Node *prog, int level)
 	/* global variables */
 	foreach(vp, prog->extra.e_prog->first)
 	{
-		if (vp->type->tag != T_EVFLAG && vp->decl && vp->decl->decl_init)
-		{
-			assert(vp->type->tag != T_NONE);	/* syntax */
-			gen_var_init(vp, ctxSet(context,C_STATIC), level);
-		}
+		gen_var_init(vp, context, level);
 	}
 	/* state and state set variables */
 	foreach (ssp, prog->prog_statesets)
@@ -935,7 +1003,7 @@ static void gen_user_var_init(uint context, Node *prog, int level)
 		/* state set variables */
 		foreach(vp, ssp->extra.e_ss->var_list->first)
 		{
-			gen_var_init(vp, ctxSet(context,C_STATIC), level);
+			gen_var_init(vp, context, level);
 		}
 		foreach (sp, ssp->ss_states)
 		{
@@ -943,7 +1011,7 @@ static void gen_user_var_init(uint context, Node *prog, int level)
 			/* state variables */
 			foreach (vp, sp->extra.e_state->var_list->first)
 			{
-				gen_var_init(vp, ctxSet(context,C_STATIC), level);
+				gen_var_init(vp, context, level);
 			}
 		}
 	}

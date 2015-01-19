@@ -41,7 +41,7 @@ static void analyse_monitor(SymTable st, Node *scope, Node *defn);
 static void analyse_sync(SymTable st, Node *scope, Node *defn);
 static void analyse_syncq(SymTable st, SyncQList *syncq_list, Node *scope, Node *defn);
 static Chan *new_channel(ChanList *chan_list, Type *type, Node *expr);
-static EvFlag *new_event_flag(EvFlagList *evflag_list, Node *expr);
+static EvFlag *new_event_flag(EvFlagList *evflag_list, Node *expr, Node *init);
 static SyncQ *new_sync_queue(SyncQList *syncq_list, uint size);
 static int connect_variable(Node *ep, Node *scope, void *parg);
 static void connect_variables(SymTable st, Node *scope);
@@ -471,7 +471,8 @@ ChanNode *build_channel_tree(
 	ChanNode *cn,			/* an already existing channel node */
 	Type *type,			/* type of this part of the variable */
 	Node *vxp,			/* which part of the variable */
-	Node *ixp			/* pv init expression */
+	Node *ixp,			/* pv init expression */
+	uint pv_init			/* are we under a pv initialiser? */
 )
 {
 	Node *member;
@@ -490,10 +491,16 @@ ChanNode *build_channel_tree(
 	dump_expr(ixp, 2);
 #endif
 
+	if (!pv_init && ixp && ixp->tag == E_PRE && ixp->token.symbol == TOK_PV)
+	{
+		ixp = ixp->pre_operand;
+		pv_init = TRUE;
+	}
+
 	switch (type->tag)
 	{
 	case T_PV:
-		if (ixp)
+		if (ixp && pv_init)
 		{
 			if (ixp->tag == E_STRING)
 				pv_name = ixp->token.str;
@@ -528,7 +535,7 @@ ChanNode *build_channel_tree(
 			cn->val.chan->name = pv_name;
 		return cn;
 	case T_EVFLAG:
-		assert(!ixp);
+		assert(!pv_init);
 		if (!cn)
 		{
 			cn = new(ChanNode);
@@ -536,7 +543,7 @@ ChanNode *build_channel_tree(
 		}
 		assert(cn->type == type);
 		if (!cn->val.chan)
-			cn->val.evflag = new_event_flag(evflag_list, vxp);
+			cn->val.evflag = new_event_flag(evflag_list, vxp, ixp);
 		return cn;
 	case T_ARRAY:
 		if (ixp)
@@ -556,7 +563,7 @@ ChanNode *build_channel_tree(
 		{
 			Node *sup_vxp = mk_subscr_node(vxp, n);
 			ChanNode *sub_cn = build_channel_tree(chan_list, evflag_list,
-				cn ? cn->val.nodes[n] : 0, type->val.array.elem_type, sup_vxp, sub_ixp);
+				cn ? cn->val.nodes[n] : 0, type->val.array.elem_type, sup_vxp, sub_ixp, pv_init);
 			if (sub_cn)
 			{
 				if (!cn)
@@ -570,10 +577,13 @@ ChanNode *build_channel_tree(
 			if (sub_ixp)
 				sub_ixp = sub_ixp->next;
 			else if (ixp)
-				extra_warning_at_node(ixp, "defaulting missing initialisers to empty\n");
+			{
+				extra_warning_at_node(ixp, "missing elements in aggregate initialiser\n");
+				ixp = 0;
+			}
 		}
 		if (sub_ixp)
-			warning_at_node(sub_ixp, "discarding excess PV names in aggregate pv initialiser");
+			warning_at_node(sub_ixp, "discarding excess elements in aggregate initialiser");
 		return cn;
 	case T_STRUCT:
 		if (ixp)
@@ -594,7 +604,7 @@ ChanNode *build_channel_tree(
 			{
 				Node *sup_vxp = mk_select_node(vxp, member->extra.e_decl->name);
 				ChanNode *sub_cn = build_channel_tree(chan_list, evflag_list,
-					cn ? cn->val.nodes[n] : 0, member->extra.e_decl->type, sup_vxp, sub_ixp);
+					cn ? cn->val.nodes[n] : 0, member->extra.e_decl->type, sup_vxp, sub_ixp, pv_init);
 				if (sub_cn)
 				{
 					if (!cn)
@@ -609,22 +619,20 @@ ChanNode *build_channel_tree(
 					sub_ixp = sub_ixp->next;
 				else if (ixp)
 				{
-					extra_warning_at_node(ixp,
-						"defaulting missing pv struct initialisers "
-						"to 'not assigned'\n");
+					extra_warning_at_node(ixp, "missing elements in aggregate initialiser\n");
 					ixp = 0;
 				}
 				n++;
 			}
 			/* note: we completely skip over non-DECL members */
+			/* TODO add a warning message in this case */
 		}
 		if (sub_ixp)
-			warning_at_node(sub_ixp, "discarding excess pv initialisers in aggregate\n");
+			warning_at_node(sub_ixp, "discarding excess elements in aggregate initialiser");
 		return cn;
 	default:
-		if (!ixp)
-			return 0;
-		warning_at_node(ixp, "ignoring pv initialiser at non-pv type\n");
+		if (ixp && pv_init)
+			warning_at_node(ixp, "ignoring pv initialiser at non-pv type\n");
 		return 0;
 	}
 }
@@ -640,7 +648,6 @@ static void analyse_declaration(
 	VarList *var_list;
 	static uint seen_foreign = FALSE;
 	ChanNode *chan = 0;
-	Node *pv_init = 0;
 
 	assert(scope);			/* precondition */
 	assert(defn);			/* precondition */
@@ -707,19 +714,10 @@ static void analyse_declaration(
 		add_var_to_scope(vp, scope);
 	}
 
-	if (defn->decl_init && defn->decl_init->tag == E_PRE && defn->decl_init->token.symbol == TOK_PV)
-	{
-		if (scope->tag == D_PROG || scope->tag == D_SS || scope->tag == D_STATE)
-			pv_init = defn->decl_init->pre_operand;
-		else
-			error_at_node(defn->decl_init, "pv initialiser not allowed here\n");
-		defn->decl_init = 0;
-	}
-
 	assert(!vp->chan);
 	if (scope->tag != D_FUNCDEF)
 	{
-		chan = build_channel_tree(chan_list, evflag_list, 0, vp->type, mk_var_node(vp), pv_init);
+		chan = build_channel_tree(chan_list, evflag_list, 0, vp->type, mk_var_node(vp), defn->decl_init, FALSE);
 		assert(!vp->chan || vp->chan->type==vp->type);
 #ifdef DEBUG
 		report("analyse_declaration(): channel_node=\n");
@@ -947,7 +945,7 @@ static void analyse_assign(SymTable st, ChanList *chan_list, Node *scope, Node *
 				vp->type = mk_pv_type(vp->type);
 			}
 			assert(!vp->chan);
-			vp->chan = build_channel_tree(chan_list, 0, 0, vp->type, var_node, 0);
+			vp->chan = build_channel_tree(chan_list, 0, 0, vp->type, var_node, 0, FALSE);
 		}
 		else
 		{
@@ -967,7 +965,8 @@ static void analyse_assign(SymTable st, ChanList *chan_list, Node *scope, Node *
 	chan_node = traverse_var_expr(st, scope, vxp, "assign", TRUE);
 	if (!chan_node)
 		return;
-	*chan_node = *build_channel_tree(chan_list, 0, chan_node, chan_node->type, vxp, ixp);
+	/* note: the 'pv' prefix is implicit in assign clauses */
+	*chan_node = *build_channel_tree(chan_list, 0, chan_node, chan_node->type, vxp, ixp, TRUE);
 	assert(vp->chan->type == vp->type);
 }
 
@@ -1193,11 +1192,12 @@ static Chan *new_channel(ChanList *chan_list, Type *type, Node *expr)
 	return cp;
 }
 
-static EvFlag *new_event_flag(EvFlagList *evflag_list, Node *expr)
+static EvFlag *new_event_flag(EvFlagList *evflag_list, Node *expr, Node *init)
 {
 	EvFlag *ef = new(EvFlag);
 
 	ef->expr = expr;
+	ef->init = init;
 	ef->index = evflag_list->num_elems++;
 
 	/* add to evflag_list */
