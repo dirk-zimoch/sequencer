@@ -555,6 +555,7 @@ Type *base_type(Type *t)
 
 void dump_expr(Node *e, int level);
 
+/* Note: this function does intentionally *not* consider struct members */
 Type *type_contains_pv(Type *t)
 {
     Type *ct = child_type(t);
@@ -562,26 +563,6 @@ Type *type_contains_pv(Type *t)
         return t;
     else if (ct)
         return type_contains_pv(ct);
-#if 0
-    else if (t->tag == T_STRUCT) {
-        Node *member;
-        if (t->val.structure.mark) {
-            return 0;
-        }
-        t->val.structure.mark = 1;
-        foreach(member, t->val.structure.member_decls) {
-            if (member->tag == D_DECL) {
-                Type *mt = type_contains_pv(member->extra.e_decl->type);
-                if (mt) {
-                    t->val.structure.mark = 0;
-                    return mt;
-                }
-            }
-        }
-        t->val.structure.mark = 0;
-        return 0;
-    }
-#endif
     else
         return 0;
 }
