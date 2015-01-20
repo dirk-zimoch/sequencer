@@ -155,15 +155,15 @@ pv_init_exprs(r) ::= pv_init_exprs(xs) COMMA pv_init_expr(x).	{ r = link_node(xs
 monitor(r) ::= MONITOR(k) var_expr(x) SEMICOLON.		{ r = node(D_MONITOR, k, x); }
 
 sync(r) ::= SYNC(k) var_expr(x) to event_flag(f) SEMICOLON. {
-	r = node(D_SYNC, k, x, node(E_VAR, f));
+	r = node(D_SYNC, k, x, f);
 }
 sync(r) ::= SYNC(k) var_expr(x) to event_flag(f) error SEMICOLON. {
-	r = node(D_SYNC, k, x, node(E_VAR, f));
+	r = node(D_SYNC, k, x, f);
 	report("expected ';'\n");
 }
 
 syncq(r) ::= SYNCQ(k) var_expr(x) to event_flag(f) syncq_size(n) SEMICOLON. {
-	r = node(D_SYNCQ, k, x, node(E_VAR, f), n);
+	r = node(D_SYNCQ, k, x, f, n);
 }
 syncq(r) ::= SYNCQ(k) var_expr(x) syncq_size(n) SEMICOLON. {
 	r = node(D_SYNCQ, k, x, 0, n);
@@ -173,14 +173,12 @@ to ::= TO.
 to ::= .
 
 // A restricted form of expression admissable in assign, monitor, etc clauses.
-var_expr(r) ::= variable(v).					{ r = node(E_VAR, v); }
+var_expr(r) ::= variable(x).					{ r = x; }
 var_expr(r) ::= var_expr(x) LBRACKET(t) INTCON(y) RBRACKET.	{ r = node(E_SUBSCR, t, x, node(E_CONST, y)); }
 var_expr(r) ::= var_expr(x) PERIOD(t) member(y).		{ r = node(E_SELECT, t, x, y); }
 
-%type event_flag {Token}
-event_flag(r) ::= NAME(x).			{ r = x; }
-%type variable {Token}
-variable(r) ::= NAME(x).			{ r = x; }
+event_flag(r) ::= NAME(x).			{ r = node(E_VAR, x); }
+variable(r) ::= NAME(x).			{ r = node(E_VAR, x); }
 
 syncq_size(r) ::= INTCON(n).			{ r = node(E_CONST, n); }
 syncq_size(r) ::= .				{ r = 0; }
@@ -230,7 +228,7 @@ init_declarator(r) ::= declarator(x).			{ r = x; }
 init_declarator(r) ::= declarator(x) EQUAL(t) init_expr(i).
 							{ r = node(E_ASSOP, t, x, i); }
 
-declarator(r) ::= variable(n).				{ r = node(E_VAR, n); }
+declarator(r) ::= variable(x).				{ r = x; }
 declarator(r) ::= declarator(x) subscript(s).	[POST]	{ r = s; r->subscr_operand = x; }
 declarator(r) ::= declarator(x)
 	LPAREN(t) param_decls(ps) RPAREN.	[POST]	{ r = node(E_FUNC, t, x, ps); }
@@ -250,8 +248,8 @@ param_decl(r) ::= type_expr(x).				{ r = x; }
 // deprecated
 declaration(r) ::= FOREIGN variables(ds) SEMICOLON.	{ r = mk_decls(ds, mk_no_type()); }
 
-variables(r) ::= variable(x).				{ r = node(E_VAR, x); }
-variables(r) ::= variables(xs) COMMA variable(x).	{ r = link_node(xs, node(E_VAR, x)); }
+variables(r) ::= variable(x).				{ r = x; }
+variables(r) ::= variables(xs) COMMA variable(x).	{ r = link_node(xs, x); }
 
 // Initialiser
 // Note: comma operator not allowed in 'expr'.
@@ -446,7 +444,7 @@ for_statement(r) ::=
 expr(r) ::= INTCON(x).				{ r = node(E_CONST, x); }
 expr(r) ::= FPCON(x).				{ r = node(E_CONST, x); }
 expr(r) ::= string(x).				{ r = x; }
-expr(r) ::= variable(v).			{ r = node(E_VAR, v); }
+expr(r) ::= variable(x).			{ r = x; }
 
 // Primary Expression and Unary Postfix Operators
 expr(r) ::= LPAREN(t) comma_expr(x) RPAREN.		{ r = node(E_PAREN,  t, x); }
