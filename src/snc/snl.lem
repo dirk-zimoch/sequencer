@@ -131,6 +131,8 @@ final_defn(r) ::= funcdef(x).			{ r = x; }
 final_defn(r) ::= structdef(x).			{ r = x; }
 final_defn(r) ::= enumdef(x).			{ r = x; }
 
+// Assign, Monitor, Sync, Syncq
+
 assign(r) ::= ASSIGN(k) var_expr(x) to pv_init_expr(y) SEMICOLON. {
 	r = node(D_ASSIGN, k, x, y);
 }
@@ -182,6 +184,38 @@ variable(r) ::= NAME(x).			{ r = x; }
 
 syncq_size(r) ::= INTCON(n).			{ r = node(E_CONST, n); }
 syncq_size(r) ::= .				{ r = 0; }
+
+// Function Definitions
+
+funcdef(r) ::= basetype(t) declarator(d) block(b). {
+	r = node(D_FUNCDEF, d->token, mk_decl(d, t), b);
+}
+
+// Struct Definitions
+
+structdef(r) ::= STRUCT NAME(t) members(ds) SEMICOLON.		{ r = node(D_STRUCTDEF, t, ds); }
+
+members(r) ::= LBRACE member_decls(xs) RBRACE.			{ r = xs; }
+
+member_decls(r) ::= member_decl(x).				{ r = x; }
+member_decls(r) ::= member_decls(xs) member_decl(x).		{ r = link_node(xs, x); }
+
+member_decl(r) ::= basetype(t) declarator(d) SEMICOLON.		{ r = mk_decl(d, t); }
+member_decl(r) ::= c_code(x).					{ r = x; }
+
+// Enum Definitions
+
+enumdef(r) ::= ENUM NAME(t) LBRACE choices(cs) opt_comma RBRACE SEMICOLON. { r = node(D_ENUMDEF, t, cs); }
+
+choices(r) ::= choices(xs) COMMA choice(x).	{ r = link_node(xs, x); }
+choices(r) ::= choice(x).			{ r = x; }
+
+choice(r) ::= NAME(c).				{ r = node(E_VAR, c); }
+choice(r) ::= NAME(c) EQUAL(o) expr(i).		{ r = node(E_ASSOP, o, node(E_VAR, c), i); }
+choice(r) ::= NAME(c) error. {
+	r = node(E_VAR, c);
+	report("expected '=' or ',' or '}'\n");
+}
 
 // Declarations
 
@@ -406,7 +440,7 @@ for_statement(r) ::=
 
 // Note: the non-terminal 'expr' does not include application of the comma operator.
 // Comma separated lists of 'expr' can be: function arguments (non-terminal
-// 'args')and applications of the comma operator (non-terminal 'comma_expr').
+// 'args') and applications of the comma operator (non-terminal 'comma_expr').
 
 // Atomic
 expr(r) ::= INTCON(x).				{ r = node(E_CONST, x); }
@@ -492,38 +526,6 @@ args(r) ::= .					{ r = 0; }
 string(r) ::= STRCON(t).			{ r = node(E_STRING, t); }
 
 member(r) ::= NAME(t).				{ r = node(E_MEMBER, t); }
-
-// Function Definitions
-
-funcdef(r) ::= basetype(t) declarator(d) block(b). {
-	r = node(D_FUNCDEF, d->token, mk_decl(d, t), b);
-}
-
-// Struct Definitions
-
-structdef(r) ::= STRUCT NAME(t) members(ds) SEMICOLON.		{ r = node(D_STRUCTDEF, t, ds); }
-
-members(r) ::= LBRACE member_decls(xs) RBRACE.			{ r = xs; }
-
-member_decls(r) ::= member_decl(x).				{ r = x; }
-member_decls(r) ::= member_decls(xs) member_decl(x).		{ r = link_node(xs, x); }
-
-member_decl(r) ::= basetype(t) declarator(d) SEMICOLON.		{ r = mk_decl(d, t); }
-member_decl(r) ::= c_code(x).					{ r = x; }
-
-// Enum Definitions
-
-enumdef(r) ::= ENUM NAME(t) LBRACE choices(cs) opt_comma RBRACE SEMICOLON. { r = node(D_ENUMDEF, t, cs); }
-
-choices(r) ::= choices(xs) COMMA choice(x).	{ r = link_node(xs, x); }
-choices(r) ::= choice(x).			{ r = x; }
-
-choice(r) ::= NAME(c).				{ r = node(E_VAR, c); }
-choice(r) ::= NAME(c) EQUAL(o) expr(i).		{ r = node(E_ASSOP, o, node(E_VAR, c), i); }
-choice(r) ::= NAME(c) error. {
-	r = node(E_VAR, c);
-	report("expected '=' or ',' or '}'\n");
-}
 
 opt_comma ::= .
 opt_comma ::= COMMA.
