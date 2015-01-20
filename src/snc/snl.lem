@@ -133,24 +133,24 @@ final_defn(r) ::= enumdef(x).			{ r = x; }
 
 // Assign, Monitor, Sync, Syncq
 
-assign(r) ::= ASSIGN(k) var_expr(x) to pv_init_expr(y) SEMICOLON. {
+assign(r) ::= ASSIGN(k) var_expr(x) to pv_name_expr(y) SEMICOLON. {
 	r = node(D_ASSIGN, k, x, y);
 }
 assign(r) ::= ASSIGN(k) var_expr(x) SEMICOLON. {
 	r = node(D_ASSIGN, k, x, 0);
 }
 
-pv_init_expr(r) ::= string(x).				{ r = x; }
-pv_init_expr(r) ::= LBRACE(t) RBRACE.			{ r = node(E_INIT, t, 0); }
-pv_init_expr(r) ::= LBRACE(t) pv_init_exprs(x) RBRACE.	{ r = node(E_INIT, t, x); }
+pv_name_expr(r) ::= string(x).				{ r = x; }
+pv_name_expr(r) ::= LBRACE(t) RBRACE.			{ r = node(E_INIT, t, 0); }
+pv_name_expr(r) ::= LBRACE(t) pv_name_exprs(x) RBRACE.	{ r = node(E_INIT, t, x); }
 
-pv_init_exprs(r) ::= pv_init_expr(x).				{ r = x; }
-pv_init_exprs(r) ::= pv_init_exprs(xs) COMMA pv_init_expr(x).	{ r = link_node(xs, x); }
+pv_name_exprs(r) ::= pv_name_expr(x).				{ r = x; }
+pv_name_exprs(r) ::= pv_name_exprs(xs) COMMA pv_name_expr(x).	{ r = link_node(xs, x); }
 
 //pv_struct_expr(r) ::= LBRACE(t) pv_init_members(x) RBRACE.	{ r = node(E_INIT, t, x); }
 //pv_init_members(r) ::= pv_init_member(x).				{ r = x; }
 //pv_init_members(r) ::= pv_init_members(xs) COMMA pv_init_member(r).	{ r = link_nodes(xs, x); }
-//pv_init_member(r) ::= PERIOD member(x) EQUAL pv_init_expr.	{ r = node(E_SELECT, k, x, y); }
+//pv_init_member(r) ::= PERIOD member(x) EQUAL pv_name_expr.	{ r = node(E_SELECT, k, x, y); }
 
 monitor(r) ::= MONITOR(k) var_expr(x) SEMICOLON.		{ r = node(D_MONITOR, k, x); }
 
@@ -258,6 +258,21 @@ init_expr(r) ::= LPAREN(tc) type_expr(c) RPAREN LBRACE(tx) init_exprs(x) RBRACE.
 init_expr(r) ::= LBRACE(t) init_exprs(x) RBRACE.	{ r = node(E_INIT, t, x); }
 init_expr(r) ::= expr(x).				{ r = x; }
 init_expr(r) ::= PV(t) pv_init_expr(x).			{ r = node(E_PRE, t, x); }
+
+pv_init_expr(r) ::= string(x).						{ r = x; }
+pv_init_expr(r) ::= LPAREN(t) pv_name_expr(x) pv_init_args(as) RPAREN.	{ r = node(E_PVINIT, t, x, as); }
+pv_init_expr(r) ::= LBRACE(t) RBRACE.					{ r = node(E_INIT, t, 0); }
+pv_init_expr(r) ::= LBRACE(t) pv_init_exprs(x) RBRACE.			{ r = node(E_INIT, t, x); }
+
+pv_init_exprs(r) ::= pv_init_expr(x).				{ r = x; }
+pv_init_exprs(r) ::= pv_init_exprs(xs) COMMA pv_init_expr(x).	{ r = link_node(xs, x); }
+
+pv_init_args(r) ::= .						{ r = 0; }
+pv_init_args(r) ::= pv_init_args(xs) COMMA pv_init_arg(x).	{ r = link_node(xs, x); }
+
+pv_init_arg(r) ::= MONITOR(k).				{ r = node(E_PVARG, k, 0); }
+pv_init_arg(r) ::= SYNC(k) event_flag(x).		{ r = node(E_PVARG, k, x); }
+pv_init_arg(r) ::= SYNCQ(k) syncq_size(n).		{ r = node(E_PVARG, k, n); }
 
 init_exprs(r) ::= init_exprs(xs) COMMA init_expr(x).	{ r = link_node(xs, x); }
 init_exprs(r) ::= init_expr(x).				{ r = x; }

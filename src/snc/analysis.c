@@ -35,7 +35,13 @@ void *structdefs = &structdefs;
 static void analyse_definitions(Program *p);
 static void analyse_option(Options *options, Node *defn);
 static void analyse_state_option(StateOptions *options, Node *defn);
-static void analyse_declaration(SymTable st, ChanList *chan_list, EvFlagList *evflag_list, Node *scope, Node *defn);
+static void analyse_declaration(
+	SymTable st,
+	ChanList *chan_list,
+	EvFlagList *evflag_list,
+	SyncQList *syncq_list,
+	Node *scope,
+	Node *defn);
 static void analyse_assign(SymTable st, ChanList *chan_list, Node *scope, Node *defn);
 static void analyse_monitor(SymTable st, Node *scope, Node *defn);
 static void analyse_sync(SymTable st, Node *scope, Node *defn);
@@ -167,11 +173,11 @@ static void analyse_defns(Node *defn_list, Node *scope, Program *p)
 			}
 			break;
 		case D_DECL:
-			analyse_declaration(p->sym_table, p->chan_list, p->evflag_list, scope, defn);
+			analyse_declaration(p->sym_table, p->chan_list, p->evflag_list, p->syncq_list, scope, defn);
 			break;
 		case D_FUNCDEF:
 			analyse_funcdef(defn);
-			analyse_declaration(p->sym_table, p->chan_list, p->evflag_list, scope, defn->funcdef_decl);
+			analyse_declaration(p->sym_table, p->chan_list, p->evflag_list, p->syncq_list, scope, defn->funcdef_decl);
 			break;
 		case D_ENUMDEF:
 			/* TODO: analyse enum definition */
@@ -465,14 +471,20 @@ void report_expr(Node *xp)
 /* Build the channel tree for a part of a variable. The part is denoted by
    an expression 'vxp' that consists only of variables, subscripts (with
    constant index), and member selection. */
-ChanNode *build_channel_tree(
+static ChanNode *build_channel_tree(
+	SymTable st,
 	ChanList *chan_list,		/* program wide channel list */
 	EvFlagList *evflag_list,	/* program wide event flag list */
+	SyncQList *syncq_list,		/* program wide syncq list */
+	Node *scope,			/* variable scope (if in pv initializer) */
 	ChanNode *cn,			/* an already existing channel node */
 	Type *type,			/* type of this part of the variable */
 	Node *vxp,			/* which part of the variable */
 	Node *ixp,			/* pv init expression */
-	uint pv_init			/* are we under a pv initialiser? */
+	uint pv_init,			/* are we under a pv initialiser? */
+	uint monitor,
+	Var *sync,
+	uint syncq
 )
 {
 	Node *member;
@@ -491,10 +503,58 @@ ChanNode *build_channel_tree(
 	dump_node(ixp, 2);
 #endif
 
-	if (!pv_init && ixp && ixp->tag == E_PRE && ixp->token.symbol == TOK_PV)
+	if (ixp && ixp->tag == E_PRE && ixp->token.symbol == TOK_PV)
 	{
+		assert(!pv_init);		/* syntax */
 		ixp = ixp->pre_operand;
 		pv_init = TRUE;
+	}
+
+	if (ixp && ixp->tag == E_PVINIT)
+	{
+		Node *arg;
+
+		assert(pv_init);		/* syntax */
+		foreach (arg, ixp->pvinit_args)
+		{
+			uint n_size = 0;
+			Var *evp;
+			char *ef_name;
+
+			switch (arg->token.symbol)
+			{
+			case TOK_MONITOR:
+				monitor = TRUE;
+				break;
+			case TOK_SYNC:
+				ef_name = arg->pvarg_arg->token.str;
+				assert(ef_name);
+
+				evp = find_var(st, ef_name, scope);
+				if (!evp)
+				{
+					error_at_node(ixp, "event flag '%s' not declared\n", ef_name);
+					break;
+				}
+				if (evp->type->tag != T_EVFLAG)
+				{
+					error_at_node(ixp, "variable '%s' is not an event flag\n", ef_name);
+					break;
+				}
+				sync = evp;
+				break;
+			case TOK_SYNCQ:
+				if (!strtoui(arg->pvarg_arg->token.str, UINT_MAX, &n_size) || n_size < 1)
+				{
+					error_at_node(arg->pvarg_arg, "queue size '%s' out of range\n",
+						arg->pvarg_arg->token.str);
+					break;
+				}
+				syncq = n_size;
+				break;
+			}
+		}
+		ixp = ixp->pvinit_names;
 	}
 
 	switch (type->tag)
@@ -503,7 +563,9 @@ ChanNode *build_channel_tree(
 		if (ixp && pv_init)
 		{
 			if (ixp->tag == E_STRING)
+			{
 				pv_name = ixp->token.str;
+			}
 			else
 			{
 				error_at_node(ixp, "unexpected '%s' in pv init expression '",
@@ -533,6 +595,21 @@ ChanNode *build_channel_tree(
 			cn->val.chan = new_channel(chan_list, type, vxp);
 		if (pv_name)
 			cn->val.chan->name = pv_name;
+		if (monitor)
+		{
+			Monitor *mon = new(Monitor);
+			mon->scope = scope;
+			mon->next = cn->val.chan->monitor;
+			cn->val.chan->monitor = mon;
+		}
+		if (sync)
+		{
+			cn->val.chan->sync = sync;
+		}
+		if (syncq)
+		{
+			cn->val.chan->syncq = new_sync_queue(syncq_list, syncq);
+		}
 		return cn;
 	case T_EVFLAG:
 		assert(!pv_init);
@@ -562,8 +639,9 @@ ChanNode *build_channel_tree(
 		for (n = 0; n < type->val.array.num_elems; n++)
 		{
 			Node *sup_vxp = mk_subscr_node(vxp, n);
-			ChanNode *sub_cn = build_channel_tree(chan_list, evflag_list,
-				cn ? cn->val.nodes[n] : 0, type->val.array.elem_type, sup_vxp, sub_ixp, pv_init);
+			ChanNode *sub_cn = build_channel_tree(st, chan_list, evflag_list, syncq_list, scope,
+				cn ? cn->val.nodes[n] : 0, type->val.array.elem_type, sup_vxp, sub_ixp,
+				pv_init, monitor, sync, syncq);
 			if (sub_cn)
 			{
 				if (!cn)
@@ -603,8 +681,9 @@ ChanNode *build_channel_tree(
 			if (member->tag == D_DECL)
 			{
 				Node *sup_vxp = mk_select_node(vxp, member->extra.e_decl->name);
-				ChanNode *sub_cn = build_channel_tree(chan_list, evflag_list,
-					cn ? cn->val.nodes[n] : 0, member->extra.e_decl->type, sup_vxp, sub_ixp, pv_init);
+				ChanNode *sub_cn = build_channel_tree(st, chan_list, evflag_list, syncq_list, scope,
+					cn ? cn->val.nodes[n] : 0, member->extra.e_decl->type, sup_vxp, sub_ixp,
+					pv_init, monitor, sync, syncq);
 				if (sub_cn)
 				{
 					if (!cn)
@@ -641,6 +720,7 @@ static void analyse_declaration(
 	SymTable st,
 	ChanList *chan_list,
 	EvFlagList *evflag_list,
+	SyncQList *syncq_list,
 	Node *scope,
 	Node *defn)
 {
@@ -717,7 +797,9 @@ static void analyse_declaration(
 	assert(!vp->chan);
 	if (scope->tag != D_FUNCDEF)
 	{
-		chan = build_channel_tree(chan_list, evflag_list, 0, vp->type, mk_var_node(vp), defn->decl_init, FALSE);
+		chan = build_channel_tree(st, chan_list, evflag_list, syncq_list,
+			scope, 0, vp->type, mk_var_node(vp), defn->decl_init,
+			FALSE, FALSE, 0, 0);
 		assert(!vp->chan || vp->chan->type==vp->type);
 #ifdef DEBUG
 		report("analyse_declaration(): channel_node=\n");
@@ -945,7 +1027,7 @@ static void analyse_assign(SymTable st, ChanList *chan_list, Node *scope, Node *
 				vp->type = mk_pv_type(vp->type);
 			}
 			assert(!vp->chan);
-			vp->chan = build_channel_tree(chan_list, 0, 0, vp->type, var_node, 0, FALSE);
+			vp->chan = build_channel_tree(st, chan_list, 0, 0, 0, 0, vp->type, var_node, 0, FALSE, FALSE, 0, 0);
 		}
 		else
 		{
@@ -966,7 +1048,7 @@ static void analyse_assign(SymTable st, ChanList *chan_list, Node *scope, Node *
 	if (!chan_node)
 		return;
 	/* note: the 'pv' prefix is implicit in assign clauses */
-	*chan_node = *build_channel_tree(chan_list, 0, chan_node, chan_node->type, vxp, ixp, TRUE);
+	*chan_node = *build_channel_tree(st, chan_list, 0, 0, scope, chan_node, chan_node->type, vxp, ixp, TRUE, FALSE, 0, 0);
 	assert(vp->chan->type == vp->type);
 }
 

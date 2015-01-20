@@ -141,6 +141,8 @@ enum node_tag			/* description [child nodes...] */
 	E_PAREN,		/* parenthesized expression [expr] */
 	E_POST,			/* unary postfix operator [operand] */
 	E_PRE,			/* unary prefix operator [operand] */
+	E_PVARG,		/* pv init argument [arg] */
+	E_PVINIT,		/* pv initializer [names,args] */
 	E_SELECT,		/* member selection [left,right] */
 	E_SIZEOF,		/* sizeof [decl] */
 	E_STRING,		/* string constant [] */
@@ -357,6 +359,9 @@ struct program
 #define prog_statesets	children[3]
 #define prog_exit	children[4]
 #define prog_xdefns	children[5]
+#define pvarg_arg	children[0]
+#define pvinit_names	children[0]
+#define pvinit_args	children[1]
 #define return_expr	children[0]
 #define select_left	children[0]
 #define select_right	children[1]
@@ -421,6 +426,8 @@ node_info[]
 	{ "E_PAREN",	1 },
 	{ "E_POST",	1 },
 	{ "E_PRE",	1 },
+	{ "E_PVARG",	1 },
+	{ "E_PVINIT",	2 },
 	{ "E_SELECT",	2 },
 	{ "E_SIZEOF",	1 },
 	{ "E_STRING",	0 },
