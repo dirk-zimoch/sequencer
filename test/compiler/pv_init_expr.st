@@ -12,4 +12,18 @@ struct mixing_pv_and_plain_in_struct contrived = {
     pv { "{DEV}:readback1", "{DEV}:readback2", "{DEV}:readback3" }
 };
 
+evflag ef;
+
+struct mixing_pv_and_plain_in_struct with_pv_args = {
+    42,
+    pv ("{DEV}:stat", monitor),
+    pv ({ "{DEV}:readback1", "{DEV}:readback2", "{DEV}:readback3" }, sync ef, syncq 5)
+};
+
+struct mixing_pv_and_plain_in_struct with_pv_args2 = {
+    42,
+    pv ("{DEV}:stat"),
+    pv { ("{DEV}:readback1", syncq 7), ("{DEV}:readback2",monitor), "{DEV}:readback3" }
+};
+
 #include "../simple.st"
