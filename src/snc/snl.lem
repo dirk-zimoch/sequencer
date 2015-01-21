@@ -177,7 +177,8 @@ var_expr(r) ::= variable(x).					{ r = x; }
 var_expr(r) ::= var_expr(x) LBRACKET(t) INTCON(y) RBRACKET.	{ r = node(E_SUBSCR, t, x, node(E_CONST, y)); }
 var_expr(r) ::= var_expr(x) PERIOD(t) member(y).		{ r = node(E_SELECT, t, x, y); }
 
-event_flag(r) ::= NAME(x).			{ r = node(E_VAR, x); }
+event_flag(r) ::= var_expr(x).			{ r = x; }
+
 variable(r) ::= NAME(x).			{ r = node(E_VAR, x); }
 
 syncq_size(r) ::= INTCON(n).			{ r = node(E_CONST, n); }

@@ -48,6 +48,7 @@ static void connect_variables(SymTable st, Node *scope);
 static void connect_state_change_stmts(SymTable st, Node *scope);
 static uint connect_states(SymTable st, Node *ss_list);
 static void check_states_reachable_from_first(Node *ss);
+static ChanNode *traverse_var_expr(SymTable st, Node *scope, Node *vxp, const char *what, uint same_scope);
 static Var *find_var(SymTable st, char *name, Node *scope);
 
 void analyse_program(Node *prog, Options *options)
@@ -474,7 +475,7 @@ static ChanNode *build_channel_tree(
 	Node *ixp,			/* pv init expression */
 	uint pv_init,			/* are we under a pv initialiser? */
 	uint monitor,
-	Var *sync,
+	EvFlag *sync,
 	uint syncq
 )
 {
@@ -509,8 +510,7 @@ static ChanNode *build_channel_tree(
 		foreach (arg, ixp->pvinit_args)
 		{
 			uint n_size = 0;
-			Var *evp;
-			char *ef_name;
+			ChanNode *ef_chan_node;
 
 			switch (arg->token.symbol)
 			{
@@ -518,21 +518,21 @@ static ChanNode *build_channel_tree(
 				monitor = TRUE;
 				break;
 			case TOK_SYNC:
-				ef_name = arg->pvarg_arg->token.str;
-				assert(ef_name);
+				ef_chan_node = traverse_var_expr(p->sym_table, scope, arg->pvarg_arg, "sync", FALSE);
 
-				evp = find_var(p->sym_table, ef_name, scope);
-				if (!evp)
+				if (!ef_chan_node)
 				{
-					error_at_node(ixp, "event flag '%s' not declared\n", ef_name);
 					break;
 				}
-				if (evp->type->tag != T_EVFLAG)
+				if (ef_chan_node->type->tag != T_EVFLAG)
 				{
-					error_at_node(ixp, "variable '%s' is not an event flag\n", ef_name);
+					error_at_node(arg->pvarg_arg, "expression '");
+					report_expr(arg->pvarg_arg);
+					report("' is not an event flag\n");
 					break;
 				}
-				sync = evp;
+
+				sync = ef_chan_node->val.evflag;
 				break;
 			case TOK_SYNCQ:
 				if (!strtoui(arg->pvarg_arg->token.str, UINT_MAX, &n_size) || n_size < 1)
@@ -1123,7 +1123,7 @@ static void analyse_monitor(SymTable st, Node *scope, Node *defn)
 
 static uint sync_iteratee(Chan *chan, void *env)
 {
-	Var *ef = (Var *)env;
+	EvFlag *ef = (EvFlag *)env;
 	if (chan->sync)
 		return TRUE;
 	chan->sync = ef;
@@ -1132,40 +1132,41 @@ static uint sync_iteratee(Chan *chan, void *env)
 
 static void analyse_sync(SymTable st, Node *scope, Node *defn)
 {
-	char		*ef_name;
-	Var		*evp;
-	ChanNode	*chan_node;
+	ChanNode *chan_node, *ef_chan_node;
 
 	assert(scope);
 	assert(defn);
 	assert(defn->tag == D_SYNC);
 
 	assert(defn->sync_evflag);
-	ef_name = defn->sync_evflag->token.str;
-	assert(ef_name);
 
-	evp = find_var(st, ef_name, scope);
-	if (!evp)
+	ef_chan_node = traverse_var_expr(st, scope, defn->sync_evflag, "sync", FALSE);
+
+	if (!ef_chan_node)
 	{
-		error_at_node(defn, "event flag '%s' not declared\n", ef_name);
+		/* TODO the error message from traverse_var_expr is not correct */
 		return;
 	}
-	if (evp->type->tag != T_EVFLAG)
+	if (ef_chan_node->type->tag != T_EVFLAG)
 	{
-		error_at_node(defn, "variable '%s' is not an event flag\n", ef_name);
+		error_at_node(defn, "expression '");
+		report_expr(defn->sync_evflag);
+		report("' is not an event flag\n");
 		return;
 	}
 
 #ifdef DEBUG
 	report("sync ");
-        report_expr(defn->sync_expr);
+	report_expr(defn->sync_expr);
+	report(" to ");
+	report_expr(defn->sync_evflag);
 	report(";\n");
 #endif
 
 	chan_node = traverse_var_expr(st, scope, defn->sync_expr, "sync", TRUE);
 	if (!chan_node)
 		return;
-	if (traverse_channel_tree(chan_node, sync_iteratee, 0, evp))
+	if (traverse_channel_tree(chan_node, sync_iteratee, 0, ef_chan_node->val.evflag))
 	{
 		error_at_node(defn, "expression or parts of it are already synced\n");
 	}
@@ -1183,10 +1184,9 @@ static uint syncq_iteratee(Chan *chan, void *env)
 
 static void analyse_syncq(SymTable st, SyncQList *syncq_list, Node *scope, Node *defn)
 {
-	Var		*evp = 0;
 	SyncQ		*qp;
 	uint		n_size = 0;
-	ChanNode	*chan_node;
+	ChanNode	*chan_node, *ef_chan_node = 0;
 
 	assert(scope);
 	assert(defn);
@@ -1205,18 +1205,18 @@ static void analyse_syncq(SymTable st, SyncQList *syncq_list, Node *scope, Node 
 	}
 	if (defn->syncq_evflag)
 	{
-		char *ef_name = defn->syncq_evflag->token.str;
-		assert(ef_name);
+		ef_chan_node = traverse_var_expr(st, scope, defn->syncq_evflag, "sync", FALSE);
 
-		evp = find_var(st, ef_name, scope);
-		if (!evp)
+		if (!ef_chan_node)
 		{
-			error_at_node(defn, "event flag '%s' not declared\n", ef_name);
+			/* TODO the error message from traverse_var_expr is not correct */
 			return;
 		}
-		if (evp->type->tag != T_EVFLAG)
+		if (ef_chan_node->type->tag != T_EVFLAG)
 		{
-			error_at_node(defn, "variable '%s' is not an event flag\n", ef_name);
+			error_at_node(defn, "expression '");
+			report_expr(defn->syncq_evflag);
+			report("' is not an event flag\n");
 			return;
 		}
 	}
@@ -1232,8 +1232,8 @@ static void analyse_syncq(SymTable st, SyncQList *syncq_list, Node *scope, Node 
 	if (!chan_node)
 		return;
 
-	if (evp)
-		if (traverse_channel_tree(chan_node, sync_iteratee, 0, evp))
+	if (ef_chan_node)
+		if (traverse_channel_tree(chan_node, sync_iteratee, 0, ef_chan_node->val.evflag))
 			error_at_node(defn, "expression or parts of it are already synced\n");
 
 	if (traverse_channel_tree(chan_node, syncq_iteratee, 0, qp))

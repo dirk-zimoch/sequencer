@@ -870,9 +870,9 @@ static void gen_channel_init(uint context, Chan *cp)
 	else
 		gen_code("1, ");
 
-	/* event flag id if synced, else NOEVFLAG */
+	/* event flag expression if synced, else NOEVFLAG */
 	if (cp->sync)
-		gen_var_access(context, cp->sync);
+		gen_expr(context, mk_void_type(), cp->sync->expr, 0);
 	else
 		gen_code("NOEVFLAG");
 

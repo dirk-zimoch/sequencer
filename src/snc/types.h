@@ -223,7 +223,7 @@ struct channel				/* channel assignment info */
 	Node	*expr;			/* path from variable to this part */
 	Type	*type;			/* cached type of this part */
 	Monitor	*monitor;		/* monitor scopes */
-	Var	*sync;			/* event flag variable if sync'd */
+	EvFlag	*sync;			/* event flag if sync'd */
 	SyncQ	*syncq;			/* sync queue if syncQ'd */
 };
 
