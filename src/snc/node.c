@@ -48,6 +48,9 @@ Node *node(
 	/* allocate extra data */
 	switch (tag)
 	{
+	case D_PROG:
+		ep->extra.e_prog = new(Program);
+		break;
 	case D_SS:
 		ep->extra.e_ss = new(StateSet);
 		break;
@@ -134,7 +137,7 @@ VarList **pvar_list_from_scope(Node *scope)
 	switch(scope->tag)
 	{
 	case D_PROG:
-		return &scope->extra.e_prog;
+		return &scope->extra.e_prog->var_list;
 	case D_SS:
 		assert(scope->extra.e_ss);	/* invariant */
 		return &scope->extra.e_ss->var_list;

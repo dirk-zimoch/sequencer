@@ -990,7 +990,7 @@ static void gen_user_var_init(uint context, Node *prog, int level)
 
 	assert(prog->tag == D_PROG);
 	/* global variables */
-	foreach(vp, prog->extra.e_prog->first)
+	foreach(vp, var_list_from_scope(prog)->first)
 	{
 		gen_var_init(vp, context, level);
 	}

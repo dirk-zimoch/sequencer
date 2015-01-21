@@ -179,7 +179,7 @@ struct syntax_node			/* generic syntax node */
 		Var	*e_var;		/* variable reference */
 		Var	*e_decl;	/* variable declaration */
 		uint	e_option;	/* option value (1 or 0) */
-		VarList	*e_prog;	/* top-level declarations */
+		Program	*e_prog;	/* program data */
 		StateSet *e_ss;		/* state set data */
 		State	*e_state;	/* state data */
 		When	*e_when;	/* transition data */
@@ -274,16 +274,9 @@ struct var_list
 
 struct program
 {
-	/* result of parsing phase */
-	Node		*prog;		/* the whole syntax tree */
-
-	/* these point into children of the prog node, for convenience */
-	char		*name;		/* ptr to program name (string) */
-	char		*param;		/* parameter string for program stmt */
-
-	/* these are calculated in the analysis phase */
-	Options		*options;	/* program options, from source or command line */
 	SymTable	sym_table;	/* symbol table */
+	Options		*options;	/* program options, from source or command line */
+	VarList		*var_list;	/* list of global variables */
 	ChanList	*chan_list;	/* channel list, incl. number of channels */
 	EvFlagList	*evflag_list;	/* event flag list, incl. number of event flags */
 	SyncQList	*syncq_list;	/* syncq list, incl. number of syncqs */

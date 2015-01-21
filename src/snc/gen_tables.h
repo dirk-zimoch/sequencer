@@ -15,6 +15,6 @@ in the file LICENSE that is included with this distribution.
 
 #include "types.h"
 
-void gen_tables(Program *program);
+void gen_tables(Node *prog);
 
 #endif	/*INCLgentablesh*/

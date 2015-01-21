@@ -42,8 +42,7 @@ static char *replace_extension(const char *in, const char *ext);
 int main(int argc, char *argv[])
 {
 	FILE	*in;
-	Program	*prg;
-        Node    *exp;
+        Node    *prog;
 
 	/* Get command arguments */
 	parse_args(argc, argv);
@@ -65,12 +64,12 @@ int main(int argc, char *argv[])
            since the lexer maintains its own buffer */
 	setvbuf(in, NULL, _IONBF, 0);
 
-	exp = parse_program(in, input_name);
+	prog = parse_program(in, input_name);
 
-        prg = analyse_program(exp, &options);
+        analyse_program(prog, &options);
 
 	if (err_cnt == 0)
-		generate_code(prg);
+		generate_code(prog);
 
 	return err_cnt ? EXIT_FAILURE : EXIT_SUCCESS;
 }

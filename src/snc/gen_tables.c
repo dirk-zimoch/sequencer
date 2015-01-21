@@ -37,7 +37,7 @@ typedef struct event_mask_args {
 
 static void gen_state_table(Node *ss_list, uint num_event_flags, uint num_channels);
 static void fill_state_struct(Node *sp, char *ss_name, uint ss_num);
-static void gen_prog_table(Program *p);
+static void gen_prog_table(Node *prog);
 static void encode_options(Options *options);
 static void encode_state_options(StateOptions options);
 static void gen_ss_table(Node *ss_list);
@@ -45,12 +45,17 @@ static void gen_state_event_mask(Node *sp, uint num_event_flags,
 	seqMask *event_words, uint num_event_words);
 
 /* Generate all kinds of tables for a SNL program. */
-void gen_tables(Program *p)
+void gen_tables(Node *prog)
 {
+	Program *p;
+
+	assert(prog->tag == D_PROG);
+	p = prog->extra.e_prog;
+
 	gen_code("\n/************************ Tables ************************/\n");
-	gen_state_table(p->prog->prog_statesets, p->evflag_list->num_elems, p->chan_list->num_elems);
-	gen_ss_table(p->prog->prog_statesets);
-	gen_prog_table(p);
+	gen_state_table(prog->prog_statesets, p->evflag_list->num_elems, p->chan_list->num_elems);
+	gen_ss_table(prog->prog_statesets);
+	gen_prog_table(prog);
 }
 
 /* Generate state event mask and table */
@@ -158,12 +163,14 @@ static void gen_ss_table(Node *ss_list)
 }
 
 /* Generate a single program structure ("seqProgram") */
-static void gen_prog_table(Program *p)
+static void gen_prog_table(Node *prog)
 {
+	Program *p = prog->extra.e_prog;
+
 	gen_code("\n/* Program table (global) */\n");
-	gen_code("seqProgram %s = {\n", p->name);
+	gen_code("seqProgram %s = {\n", prog->token.str);
 	gen_code("\t/* magic number */      %d,\n", MAGIC);
-	gen_code("\t/* program name */      \"%s\",\n", p->name);
+	gen_code("\t/* program name */      \"%s\",\n", prog->token.str);
 	gen_code("\t/* num. channels */     %d,\n", p->chan_list->num_elems);
 	gen_code("\t/* state sets */        " NM_STATESETS ",\n");
 	gen_code("\t/* num. state sets */   %d,\n", p->num_ss);
@@ -171,12 +178,13 @@ static void gen_prog_table(Program *p)
 		gen_code("\t/* user var size */     sizeof(struct %s),\n", NM_VARS);
 	else
 		gen_code("\t/* user var size */     0,\n");
-	gen_code("\t/* param */             \"%s\",\n", p->param);
+	gen_code("\t/* param */             \"%s\",\n",
+		prog->prog_param ? prog->prog_param->token.str : "");
 	gen_code("\t/* num. event flags */  %d,\n", p->evflag_list->num_elems);
 	gen_code("\t/* encoded options */   "); encode_options(p->options);
 	gen_code("\t/* init func */         " NM_INIT ",\n");
-	gen_code("\t/* entry func */        %s,\n", p->prog->prog_entry ? NM_ENTRY : "0");
-	gen_code("\t/* exit func */         %s,\n", p->prog->prog_exit ? NM_EXIT : "0");
+	gen_code("\t/* entry func */        %s,\n", prog->prog_entry ? NM_ENTRY : "0");
+	gen_code("\t/* exit func */         %s,\n", prog->prog_exit ? NM_EXIT : "0");
 	gen_code("\t/* num. queues */       %d\n", p->syncq_list->num_elems);
 	gen_code("};\n");
 }

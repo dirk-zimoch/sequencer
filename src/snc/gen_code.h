@@ -15,7 +15,7 @@ in the file LICENSE that is included with this distribution.
 
 #include "types.h"
 
-void generate_code(Program *p);
+void generate_code(Node *prog);
 void gen_var_decl(Var *vp);
 void indent(int level);
 

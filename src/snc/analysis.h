@@ -40,6 +40,6 @@ uint traverse_channel_tree(
 
 void add_var_to_scope(Var *vp, Node *scope);
 
-Program *analyse_program(Node *ep, Options *options);
+void analyse_program(Node *ep, Options *options);
 
 #endif	/*INCLanalysish*/

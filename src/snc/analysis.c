@@ -32,7 +32,7 @@ static const int impossible = 0;
    names from other stuff in the symbol table */
 void *structdefs = &structdefs;
 
-static void analyse_definitions(Program *p);
+static void analyse_definitions(Node *prog);
 static void analyse_option(Options *options, Node *defn);
 static void analyse_state_option(StateOptions *options, Node *defn);
 static void analyse_declaration(
@@ -56,52 +56,45 @@ static uint connect_states(SymTable st, Node *ss_list);
 static void check_states_reachable_from_first(Node *ss);
 static Var *find_var(SymTable st, char *name, Node *scope);
 
-Program *analyse_program(Node *prog, Options *options)
+void analyse_program(Node *prog, Options *options)
 {
-	Program *p = new(Program);
+	Program *p;
 	Node *ss;
 
-	assert(prog);	/* precondition */
 #ifdef DEBUG
 	report("-------------------- Analysis --------------------\n");
 #endif
 
-	p->options = options;
-	p->prog = prog;
-
-	p->name			= prog->token.str;
-	if (prog->prog_param)
-		p->param	= prog->prog_param->token.str;
-	else
-		p->param	= "";
+	assert(prog);			/* precondition */
+	assert(prog->tag == D_PROG);	/* precondition */
+	p = prog->extra.e_prog;
 
 #ifdef DEBUG
-	report("\n**************program=%s**************\n", p->name);
+	report("\n**************program=%s**************\n", prog->token.str);
 #endif
 
+	p->options = options;
 	p->sym_table = sym_table_create();
-
 	p->chan_list = new(ChanList);
 	p->evflag_list = new(EvFlagList);
 	p->syncq_list = new(SyncQList);
 
 #ifdef DEBUG
-	report("created symbol table, channel list, and syncq list\n");
+	report("created symbol table, channel list, event flag list, and syncq list\n");
 #endif
 
-	register_builtins(p->sym_table, p->prog);
+	register_builtins(p->sym_table, prog);
 
 #ifdef DEBUG
 	report("registered builtin symbols\n");
 #endif
 
-	analyse_definitions(p);
+	analyse_definitions(prog);
 	p->num_ss = connect_states(p->sym_table, prog);
 	connect_variables(p->sym_table, prog);
 	connect_state_change_stmts(p->sym_table, prog);
 	foreach (ss, prog->prog_statesets)
 		check_states_reachable_from_first(ss);
-	return p;
 }
 
 static void fixup_struct_refs(SymTable st, Type *t);
@@ -238,13 +231,20 @@ static int analyse_scope(Node *scope, Node *parent_scope, void *parg)
 	return TRUE; /* always descend into children */
 }
 
-static void analyse_definitions(Program *p)
+static void analyse_definitions(Node *prog)
 {
 #ifdef DEBUG
 	report("**begin** analyse definitions\n");
 #endif
 
-	traverse_syntax_tree(p->prog, scope_mask, ~has_sub_scope_mask, 0, analyse_scope, p);
+	traverse_syntax_tree(
+		prog,
+		scope_mask,
+		~has_sub_scope_mask,
+		0,
+		analyse_scope,
+		prog->extra.e_prog
+	);
 
 #ifdef DEBUG
 	report("**end** analyse definitions\n");
