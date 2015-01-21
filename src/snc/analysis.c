@@ -971,9 +971,9 @@ static void analyse_assign(Program *p, Node *scope, Node *defn)
 
 #ifdef DEBUG
 	report("assign ");
-        report_expr(vxp);
+	report_expr(vxp);
 	report(" to ");
-        report_expr(ixp);
+	report_expr(ixp);
 	report(";\n");
 #endif
 
@@ -1025,7 +1025,7 @@ static void analyse_assign(Program *p, Node *scope, Node *defn)
 	assert(vp->chan);
 
 #ifdef DEBUG
-        report("analyse_assign: before traverse_var_expr\n");
+	report("analyse_assign: before traverse_var_expr\n");
 	assert(vp->chan->type == vp->type);
 	dump_type(vp->type, 1);
 	dump_channel_node(vp->chan, 1);
@@ -1108,7 +1108,7 @@ static void analyse_monitor(SymTable st, Node *scope, Node *defn)
 
 #ifdef DEBUG
 	report("monitor ");
-        report_expr(defn->monitor_expr);
+	report_expr(defn->monitor_expr);
 	report(";\n");
 #endif
 
@@ -1224,7 +1224,7 @@ static void analyse_syncq(SymTable st, SyncQList *syncq_list, Node *scope, Node 
 
 #ifdef DEBUG
 	report("syncq ");
-        report_expr(defn->syncq_expr);
+	report_expr(defn->syncq_expr);
 	report(";\n");
 #endif
 
