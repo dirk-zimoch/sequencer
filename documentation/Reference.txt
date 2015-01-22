@@ -511,20 +511,74 @@ parts.
 PV Initializer
 ~~~~~~~~~~~~~~
 
+.. versionadded:: 2.3
+
 .. productionlist::
    pv_init_expr: `string`
-   pv_init_expr: "{" "}"
    pv_init_expr: "{" `pv_init_exprs` "}"
+   pv_init_expr: "{" "}"
+   pv_init_expr: "(" `pv_name_expr` `pv_init_args` ")"
    pv_init_exprs: `pv_init_expr`
    pv_init_exprs: `pv_init_exprs` "," `pv_init_expr`
+   pv_init_args: 
+   pv_init_args: `pv_init_args` "," `pv_init_arg`
+   pv_init_arg: "monitor"
+   pv_init_arg: "sync" `event_flag`
+   pv_init_arg: "syncq" `syncq_size`
 
-If an initializer for a variable with a pv part (which may be a struct
-member) is present, and is headed by the "pv" keyword, then the initializer
-(that is, the part following the "pv") is interpreted as a channel
-assignment for the variable. A pv initializer is either a single channel
-name (a string) or a (possibly empty) list of pv initializers enclosed in
-curly braces (an aggregate initializer). Aggregate initializers are used for
-arrays and structs that contain parts of pv type.
+.. productionlist::
+   pv_name_expr: `string`
+   pv_name_expr: "{" `pv_name_exprs` "}"
+   pv_name_expr: "{" "}"
+   pv_name_exprs: `pv_name_expr`
+   pv_name_exprs: `pv_name_exprs` "," `pv_name_expr`
+
+An initializer for a variable with a pv part may contain a pv initializer as
+a sub-expression, marked by an occurrence of the "pv" keyword. What follows
+the "pv" is then interpreted as channel assignments for the corresponding
+parts of the variable, optionally augmented by `pv_init_args` to specify
+monitor, sync etc. The syntax is intended to be a compatible extension to
+the traditional channel name syntax in an `assign` clause (`pv_name_expr`).
+
+A pv initializer is either
+
+*  a single channel name (a string), corrresponding to a simple `assign`
+   clause; or
+
+*  a (possibly empty) list of pv initializers enclosed in curly braces (an
+   aggregate initializer), in case the variable is an aggregate (struct or
+   array) containing (only) elements of pv type; or
+
+*  enclosed in parentheses, a `pv_name_expr` (which is an aggregate
+   expression containing only channel names at the leaves), optionally
+   followed by a list of channel specifiers for monitor, sync, and/or syncq.
+   The latter apply to *all* channels given by the `pv_name_expr`.
+
+For instance ::
+
+   evflag f;
+   int pv a[2] = pv ({"one","two"}, monitor, sync f);
+
+declares ``a`` as an array of two channels of type ``int``, `assign`\s them
+to the channel names "one" and "two", respectively, both of which should be
+`monitor`\ed and `sync`\ed to the same event flag ``f``.
+
+As another example ::
+
+   struct group {
+      int index;
+      double (pv value)[100];
+   };
+   struct group g[2] = {
+      { 0, pv ("{DEV}:rdbk", monitor) },
+      { 1, pv "{DEV}:set" }
+   };
+
+declares ``g`` as an array of two ``struct g``, with the (plain, non-pv)
+member ``index`` initialized to 0 and 1, respectively, and the (array
+valued) channel member ``value`` initialized as a `monitor`\ed channel with
+name "{DEV}:rdbk" and non-`monitor`\ed channel named ""{DEV}:set",
+respectively.
 
 .. _foreign entities:
 
@@ -700,9 +754,6 @@ and ``efSet(e)`` to signal. Event flags can be coupled to changes of a
 PV using the `sync` clause, so that the flag gets set whenever
 an event happens.
 
-You cannot declare arrays of or pointers to event flags, since
-event flags are not translated to C variables in your program.
-
 See `EventFlags`.
 
 .. _variable scope:
@@ -765,6 +816,11 @@ Process Variables
 The syntactic constructs in this section allow program variables to be
 connected to externally defined process variables.
 
+.. versionchanged:: 2.3
+
+The effect of the `assign`, `monitor`, sync`, and syncq` clauses described
+in this section can now also be achieved with `pv initializer`\s.
+
 Process Variable Expressions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -777,14 +833,15 @@ Process Variable Expressions
 
 A restricted form of expression in which only variable reference, constant
 array subscript, and struct member selection are allowed. They denote a part
-of a variable an are suitable for use in `assign`, `monitor`,
-`sync`, and `syncq` clauses.
+of a variable and are suitable for use in `assign`, `monitor`,
+`sync`, and `syncq` clauses to specify the channel or event flag nested
+inside a variable.
 
 assign
 ~~~~~~
 
 .. productionlist::
-   assign: "assign" `var_expr` `to` `pv_init_expr` ";"
+   assign: "assign" `var_expr` `to` `pv_name_expr` ";"
    assign: "assign" `var_expr` ";"
    to: "to"
    to: 
@@ -792,9 +849,10 @@ assign
 
 This assigns (connects) the designated part of a program variable to one or
 more named or anonymous process variables. The (optional) right hand side
-(after the ``to``) is a pv init expression consisting of a channel name or an
-aggregate of pv init expressions enclosed in curly braces. Their syntax and
-semantic is exactly as for `pv initializer`\ s.
+(after the ``to``) is a pv init expression consisting of a channel name or
+an aggregate of pv name expressions enclosed in curly braces. The latter is
+a subset of the `pv initializer` syntax, restricted to pv names (i.e. not
+allowing optional monitor or sync specifications).
 
 In an aggregate pv initializer, if the number of PV names does not match the
 number of elements in the array or the number of members of a struct, then
@@ -872,10 +930,11 @@ sync
 
 .. productionlist::
    sync: "sync" `var_expr` `to` `event_flag` ";"
-   event_flag: `identifier`
+   event_flag: `var_expr`
 
 This declares (parts of) a variable to be synchronized with an event flag.
 The expression that denotes the variable's part must be of pv type.
+The expression that denotes the event flag must be of type ``evflag``.
 
 When a monitor is posted on any of the process variables associated
 with the event flag (and these are `monitor`\ed), or when an
@@ -891,6 +950,10 @@ array, and as such may be associated with multiple process variables.
 *  It is now allowed to sync an event flag to more than one variable.
 *  There is now a run-time equivalent to the sync clause, see the
    built-in function `pvSync`.
+
+.. versionchanged:: 2.3
+
+The event flag can be nested inside an aggregate variable, just like the pv.
 
 syncQ
 ~~~~~
