@@ -429,29 +429,36 @@ parameter lists.
 
 .. _pv type constructor:
 
-The "pv" type constructor
+The "pv" Type Constructor
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. versionadded:: 2.3
 
 The ``pv`` type constructor syntactically behaves like the other prefix type
-operators (``const``, ``*``). It marks a part of a variable or function
-argument or struct member as available for assigning them to a channel (or
-PV) using either an `assign` clause or a `pv initializer`. Its
-argument must be a `prim_type` or an array of `prim_type`, and
-it may not be ``const``, but otherwise there are no restrictions as to where
-``pv`` may appear inside a type.
+operators (``const``, ``*``). If ``t`` is a type, then ``t pv`` is the type
+of channels transporting values of type ``t``. Note that "prefix" here means
+that it appears to the left of the declared entity. From the perspective of
+the type argument, the operator is postfix::
 
-For function parameters, and under the pointer (``*``) type constructor, the
-argument of a ``pv`` type constructor may be "void". Any channel object can
-be passed where a ``void pv`` is expected. However, the only thing you can
-do with a ``void pv`` is to pass it on to some other function expecting a
-"void pv". Built-in functions such as `pvGet` that operate on pv
-objects take a ``void pv`` as argument (or a ``void pv *`` for those that
-work on arrays of pv objects).
+  int pv x;
+
+which means that ``x`` is a channel transporting values of type ``int``.
+This is just the usual inside-out syntax of declarations and type
+expressions in C (from which SNL inherited it).
+
+The ``pv`` type constructor can be applied only to certain (value) types,
+namely those that are supported by EPICS: scalar `prim_type`\s and
+(one-dimensional) arrays of `prim_type`\s. There is one exception to this
+rule: for function parameters, and under the pointer (``*``) type
+constructor, the argument of a ``pv`` type constructor may be "void". Any
+channel object can be passed where a ``void pv`` is expected. However, the
+only thing you can do with a ``void pv`` is to pass it on to some other
+function expecting a "void pv". Built-in functions such as `pvGet` that
+operate on pv objects take a ``void pv`` as argument (or a ``void pv *`` for
+those that work on arrays of pv objects).
 
 Note that, as in C, postfix operators (like the array type constructor)
-always have higher precedence than prefix ones; this means that, e.g. ::
+always have higher precedence than prefix ones; for instance, ::
 
    int pv x[2];
 
@@ -461,9 +468,13 @@ declares an array of two 'pv of int', whereas ::
 
 declares a (single) pv with value type 'array of two int'.
 
-Marking parts of the type of a variable with ``pv`` has the same effect as
-an `assign` clause on that part. For instance, the above declaration
-of ``x`` is equivalent to ::
+In previous versions (2.2 and earlier), SNL did not distinguish between pv
+and non-pv types. For backwards compatibility with programs written against
+these earlier versions, it is allowed to leave out the "pv" keyword in the
+type when declaring channels or arrays of channels. The `assign` clause now
+has the *additional* effect of inserting any missing pv type constructor at
+the appropriate place in the variable's type. For instance, the above
+declaration of ``x`` is equivalent to ::
 
    int x[2];
    assign x to {};
@@ -479,28 +490,31 @@ whereas the one for ``y`` is the same as ::
    int y[2];
    assign y;
 
-However, using an `assign` clause to retro-fit the ``pv`` marker to
-the type of a variable (or parts of it) is *deprecated* (and causes a
-compiler warning); its purpose is backward compatibility for old programs
-and it works only in those cases where an `assign` was allowed
-previously (i.e. single PVs and one-dimensional arrays of them). It is
-highly recommended to always mark the relevant parts of a variable's type
-with ``pv``, even if this is not strictly necessary.
+.. warning::
 
-It is allowed to declare pointers with arguments that contain a ``pv`` marker,
-as well as functions taking them as argument and returning them. Such
-declarations do not cause any actual channels to be allocated, which happens
-only if
+   This use of the `assign` clause to "retro-fit" the pv type constructor
+   into the type of a variable is strongly discouraged for new programs. Its
+   sole purpose is backward compatibility for old programs and it works only
+   in those cases where an `assign` was allowed previously (i.e. single PVs
+   and one-dimensional arrays of them). It will be officially deprecated in
+   the next version, causing a compiler warning. (In version 2.3, a warning
+   is issued only if extra warnings are enabled.)
 
-* a variable is declared,
+Variables that contain pv parts may cause channel objects to be created for
+those parts. This happens if
 
-* its scope is the top-level, a state set, or a state,
+* a variable is declared (i.e. not a function parameter),
 
-* it allocates static storage for the parts of the variable marked as ``pv``.
+* its scope is the top-level or a state set (i.e. it exists over the whole
+  life time of the program instance)
+
+* it allocates static storage for the channel's value, i.e. the parts of the
+  variable under pv constructors, according to the standard C semantics for
+  variable declarations.
 
 The last point means that channels are only allocated if the item is
 
-* a single channel variables, or
+* a single channel variable, or
 
 * an array or a struct containing such an item.
 
