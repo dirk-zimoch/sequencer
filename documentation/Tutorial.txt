@@ -379,8 +379,8 @@ of 40 ``char``.
 Sequencer variables having any of these types may be
 assigned to a process variable. The type declared does not have to be
 the same as the native control system value type. The conversion
-between types is performed at run-time. For more details see the
-`corresponding section in the reference <Types>`.
+between types is performed at run-time. For more details see
+`Types and Declarations` in the reference.
 
 You may specify array variables as follows::
 
