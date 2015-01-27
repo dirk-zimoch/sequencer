@@ -61,7 +61,7 @@ div.sphinxsidebar {
     height: auto;
     left: 0;
     right: auto;
-    width: 30%;
+    width: 25%;
     overflow: auto;
     margin: 0;
     background-color: #eee;
@@ -72,7 +72,7 @@ div.documentwrapper {
     top: inherit;
     bottom: inherit;
     height: auto;
-    left: 30%;
+    left: 25%;
     right: 0;
     width: 70%;
     overflow: auto;
@@ -85,3 +85,23 @@ div.bodywrapper {
 }
 
 div.body h3 { font-size: 130%; background-color: #D8DEE3; }
+
+div.body {
+    font-size: 92%;
+}
+
+code {
+    font-size: 92%;
+}
+
+code.descname {
+    font-size: 92%;
+}
+
+pre {
+    font-size: 92%;
+}
+
+tt {
+    font-size: 92%;
+}

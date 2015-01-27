@@ -19,6 +19,18 @@ Welcome to the home page of the **EPICS Sequencer** project.
 
 .. include:: About.txt
 
+A note about font sizes
+-----------------------
+
+Many browers, most notably firefox but many others, too, come with default
+preference settings that give monospaced fonts a smaller size than other
+fonts. If the documentation pages look ugly to the point of unreadability in
+your browser because font sizes jumping around wildly, I suggest you set the
+font sizes in your browser's preferences menu all to the same value and send
+a complaint  to the maintainers of your browser. I refuse to include brittle
+work-arounds in my style sheet to compensate for these ridiculously
+out-dated default settings.
+
 .. toctree::
    :hidden:
 
