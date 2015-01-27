@@ -1,11 +1,11 @@
 my $in_prod_list = 0;
-my $after_program_section_header = 0;
+my $grammar = 0;
 print ".. productionlist::\n";
 while(<>) {
-  if (m/^Program$/) {
-    $after_program_section_header = 1;
+  if (m/^.. start grammar$/) {
+    $grammar = 1;
   }
-  elsif ($after_program_section_header) {
+  elsif ($grammar) {
     if (m/^.. productionlist::$/) {
       $in_prod_list = 1;
     }
