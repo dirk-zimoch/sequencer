@@ -27,12 +27,22 @@ Glossary of Terms
       The property of a variable or array element to occur in an `assign`
       clause in an `SNL` `program`.
 
+   event flag
+
+      An abstract data type predefined in SNL, similar to a semaphore. See
+      `Event Flags` for a more detailed description.
+
    PV
    process variable
 
       A mutable variable that is globally visible and accessible via some
       network protocol in a distributed control system, such as one based on
       `EPICS`.
+
+   channel
+
+      A connection that allows communication (read, write, monitor) with a
+      `process variable`.
 
    CA
    Channel Access
