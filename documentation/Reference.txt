@@ -46,7 +46,7 @@ Identifiers
    identifier: <same as in C>
 
 Identifiers follow the same rules as in C. They are used for variables
-(including foreign variables and event flags), the program name,
+(including foreign variables and `event flag`\s), the program name,
 states, state sets, and options.
 
 Literals
@@ -594,6 +594,8 @@ recommend not to rely too much on the numeric value. (You can use
 
 .. _arrays in C normally do: http://c-faq.com/aryptr/aryptrequiv.html
 
+.. _Event Flags:
+
 Event Flags
 ~~~~~~~~~~~
 
@@ -615,6 +617,9 @@ See `EventFlags` for motivation and examples.
 
 const
 ^^^^^
+
+.. productionlist::
+   declarator: "const" `declarator`
 
 .. versionadded:: 2.2
 
@@ -656,6 +661,9 @@ a constant pointer to constant chars.
 
 pv
 ^^
+
+.. productionlist::
+   declarator: "pv" `declarator`
 
 .. versionadded:: 2.3
 
@@ -856,19 +864,16 @@ The rationale for this is that, while bringing a normal variable into and
 out of scope is a very cheap operation, establishing a connection to a PV is
 not.
 
-Process Variables
-^^^^^^^^^^^^^^^^^
+Channel Configuration
+---------------------
 
-The syntactic constructs in this section allow program variables to be
-connected to externally defined process variables.
-
-.. versionchanged:: 2.3
-
-   The effect of the `assign`, `monitor`, sync`, and syncq` clauses described
-   in this section can now also be achieved with `PV Initializers`.
+The syntactic constructs in this section allow program variables, or parts
+of them, to be connected to externally defined process variables.
+Such a connection (also called `channel`) can optionally be configured to
+support continuous update (`monitor`), synchronization with an `event flag`
 
 Var Expressions
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 .. versionadded:: 2.3
 
@@ -880,92 +885,11 @@ Var Expressions
 A restricted form of expression in which only variable reference, constant
 array subscript, and struct member selection are allowed. They denote a part
 of a variable and are suitable for use in `assign`, `monitor`,
-`sync`, and `syncq` clauses to specify the channel or event flag nested
+`sync`, and `syncq` clauses to specify the channel or `event flag` nested
 inside a variable.
 
-.. _PV Initializers:
-
-PV Initializers
-~~~~~~~~~~~~~~~
-
-.. versionadded:: 2.3
-
-.. productionlist::
-   init_expr: "pv" `pv_init_expr`
-   pv_init_expr: `string`
-   pv_init_expr: "{" `pv_init_exprs` "}"
-   pv_init_expr: "{" "}"
-   pv_init_expr: "(" `pv_name_expr` `pv_init_args` ")"
-   pv_init_exprs: `pv_init_expr`
-   pv_init_exprs: `pv_init_exprs` "," `pv_init_expr`
-   pv_init_args: 
-   pv_init_args: `pv_init_args` "," `pv_init_arg`
-   pv_init_arg: "monitor"
-   pv_init_arg: "sync" `event_flag`
-   pv_init_arg: "syncq" `syncq_size`
-
-.. productionlist::
-   pv_name_expr: `string`
-   pv_name_expr: "{" `pv_name_exprs` "}"
-   pv_name_expr: "{" "}"
-   pv_name_exprs: `pv_name_expr`
-   pv_name_exprs: `pv_name_exprs` "," `pv_name_expr`
-
-With no initializer present, the channel names of (parts of) variables of pv
-type default to "".
-
-An initializer for a variable with a pv part may contain a pv initializer as
-a sub-expression, marked by an occurrence of the "pv" keyword. What follows
-the "pv" is then interpreted as channel assignments for the corresponding
-parts of the variable, optionally augmented by arguments to specify
-monitor, sync etc. The syntax is intended to be a compatible extension to
-the traditional channel name syntax in an `assign` clause (`pv_name_expr`).
-
-A pv initializer is either
-
-*  a single channel name (a string), corrresponding to a simple `assign`
-   clause; or
-
-*  a (possibly empty) list of pv initializers enclosed in curly braces (an
-   aggregate initializer), in case the variable is an aggregate (struct or
-   array) containing (only) elements of pv type; or
-
-*  enclosed in parentheses, a `pv_name_expr` (which is an aggregate
-   expression containing only channel names at the leaves), optionally
-   followed by a list of channel specifiers for monitor, sync, and/or syncq.
-   The latter apply to *all* channels given by the `pv_name_expr`.
-
-For instance ::
-
-   evflag f;
-   int pv a[2] = pv ({"one","two"}, monitor, sync f);
-
-declares ``a`` as an array of two channels of type ``int``, `assign`\s them
-to the channel names "one" and "two", respectively, both of which should be
-`monitor`\ed and `sync`\ed to the same event flag ``f``.
-
-As another example ::
-
-   struct group {
-      int index;
-      double (pv value)[100];
-   };
-   struct group g[2] = {
-      { 0, pv ("{DEV}:rdbk", monitor) },
-      { 1, pv "{DEV}:set" }
-   };
-
-declares ``g`` as an array of two ``struct g``, with the (plain, non-pv)
-member ``index`` initialized to 0 and 1, respectively, and the (array
-valued) channel member ``value`` initialized as a `monitor`\ed channel with
-name "{DEV}:rdbk" and non-`monitor`\ed channel named ""{DEV}:set",
-respectively.
-
-This new pv initialization syntax subsumes the separate pv initialization
-clauses `assign`, `monitor`, `sync`, and `syncq`.
-
 assign
-~~~~~~
+^^^^^^
 
 .. productionlist::
    assign: "assign" `var_expr` `to` `pv_name_expr` ";"
@@ -1034,7 +958,7 @@ used.
 
 
 monitor
-~~~~~~~
+^^^^^^^
 
 .. productionlist::
    monitor: "monitor" `var_expr` ";"
@@ -1053,18 +977,18 @@ same. The details can be found in the `EPICS Record Reference Manual`_.
 
 
 sync
-~~~~
+^^^^
 
 .. productionlist::
    sync: "sync" `var_expr` `to` `event_flag` ";"
    event_flag: `var_expr`
 
-This declares (parts of) a variable to be synchronized with an event flag.
+This declares (parts of) a variable to be synchronized with an `event flag`.
 The expression that denotes the variable's part must be of pv type.
-The expression that denotes the event flag must be of type ``evflag``.
+The expression that denotes the `event flag` must be of type ``evflag``.
 
 When a monitor is posted on any of the process variables associated
-with the event flag (and these are `monitor`\ed), or when an
+with the `event flag` (and these are `monitor`\ed), or when an
 asynchronous get or put operation completes, the corresponding event
 flag is set.
 
@@ -1074,16 +998,16 @@ array, and as such may be associated with multiple process variables.
 
 .. versionchanged:: 2.1
 
-*  It is now allowed to sync an event flag to more than one variable.
+*  It is now allowed to sync an `event flag` to more than one variable.
 *  There is now a run-time equivalent to the sync clause, see the
    built-in function `pvSync`.
 
 .. versionchanged:: 2.3
 
-   The event flag can be nested inside an aggregate variable, just like the pv.
+   The `event flag` can be nested inside an aggregate variable, just like the pv.
 
-syncQ
-~~~~~
+syncq
+^^^^^
 
 .. productionlist::
    syncq: "syncq" `var_expr` `syncq_size` ";"
@@ -1126,7 +1050,7 @@ versions.)
 
 .. versionchanged:: 2.1
 
-A queued variable no longer needs to be associated with an event flag.
+A queued variable no longer needs to be associated with an `event flag`.
 The first form of the `syncq` clause is now merely an
 abbreviation for a `sync` clause together with a `syncq`
 of the second form, i.e. ::
@@ -1138,7 +1062,7 @@ is equivalent to ::
    sync var to ef;
    syncq var qsize;
 
-Forcing the association with an event flag was never really necessary,
+Forcing the association with an `event flag` was never really necessary,
 since `pvGetQ` already checks and returns whether the queue is
 empty or not; and any state set that mentions a variable in a
 `transition` clause automatically gets woken up whenever the variable
@@ -1147,8 +1071,104 @@ flag being set as an indication that the queue is non-empty has always
 been unreliable since another `pvGetQ` might have intervened and emptied
 the queue between the two calls.
 
-Note that `pvGetQ` clears an event flag associated with the variable if
+Note that `pvGetQ` clears an `event flag` associated with the variable if
 the queue becomes empty after removing the head element.
+
+
+.. _PV Initializers:
+
+PV Initializers
+^^^^^^^^^^^^^^^
+
+.. versionadded:: 2.3
+
+PV initializers are an alternative way to specify channel configuration. The
+advantage of this new notation over the traditional separate `assign`,
+`monitor`, `sync`, and `syncq` clauses is that you can specify the full
+configuration in one place, together with the declaration, without
+mentioning the variable over and over again. Apparently this is a feature
+users have missed, since most of them use `cpp` macros to achieve a similar
+effect. The new notation has been designed to obviate this use of `cpp`.
+
+.. productionlist::
+   init_expr: "pv" `pv_init_expr`
+   pv_init_expr: `string`
+   pv_init_expr: "{" `pv_init_exprs` "}"
+   pv_init_expr: "{" "}"
+   pv_init_expr: "(" `pv_name_expr` `pv_init_args` ")"
+   pv_init_exprs: `pv_init_expr`
+   pv_init_exprs: `pv_init_exprs` "," `pv_init_expr`
+   pv_init_args: 
+   pv_init_args: `pv_init_args` "," `pv_init_arg`
+   pv_init_arg: "monitor"
+   pv_init_arg: "sync" `event_flag`
+   pv_init_arg: "syncq" `syncq_size`
+
+.. productionlist::
+   pv_name_expr: `string`
+   pv_name_expr: "{" `pv_name_exprs` "}"
+   pv_name_expr: "{" "}"
+   pv_name_exprs: `pv_name_expr`
+   pv_name_exprs: `pv_name_exprs` "," `pv_name_expr`
+
+With no initializer present, the channel names of (parts of) variables of pv
+type default to "".
+
+An initializer for a variable with a pv part may contain a pv initializer as
+a sub-expression, marked by an occurrence of the "pv" keyword. What follows
+the "pv" is then interpreted as channel assignments for the corresponding
+parts of the variable, optionally augmented by arguments to specify
+monitor, sync etc. The syntax is intended to be a compatible extension to
+the traditional channel name syntax in an `assign` clause (`pv_name_expr`).
+
+A pv initializer is either
+
+*  a single channel name (a string), corrresponding to a simple `assign`
+   clause; or
+
+*  a (possibly empty) list of pv initializers enclosed in curly braces (an
+   aggregate initializer), in case the variable is an aggregate (struct or
+   array) containing (only) elements of pv type; or
+
+*  enclosed in parentheses, a `pv_name_expr` (which is an aggregate
+   expression containing only channel names at the leaves), optionally
+   followed by a list of channel specifiers for monitor, sync, and/or syncq.
+   The latter apply to *all* channels given by the `pv_name_expr`.
+
+For instance ::
+
+   evflag f;
+   int pv a[2] = pv ({"one","two"}, monitor, sync f);
+
+declares ``a`` as an array of two channels of type ``int``, `assign`\s them
+to the channel names "one" and "two", respectively, both of which should be
+`monitor`\ed and `sync`\ed to the same `event flag` ``f``.
+
+As another example ::
+
+   struct group {
+      int index;
+      double (pv value)[100];
+   };
+   struct group g[2] = {
+      { 0, pv ("{DEV}:rdbk", monitor) },
+      { 1, pv "{DEV}:set" }
+   };
+
+declares ``g`` as an array of two ``struct g``, with the (plain, non-pv)
+member ``index`` initialized to 0 and 1, respectively, and the (array
+valued) channel member ``value`` initialized as a `monitor`\ed channel with
+name "{DEV}:rdbk" and non-`monitor`\ed channel named ""{DEV}:set",
+respectively. With the traditional separate configuration clauses, the same
+example would look like this::
+
+   struct group g[2] = {
+      { 0 },
+      { 1 }
+   };
+   assign g[0].value to "{DEV}:rdbk";
+   monitor g[0].value;
+   assign g[1].value to "{DEV}:set";
 
 
 State Set Definition
@@ -1330,7 +1350,7 @@ There are five types of event:
 -  a process variable monitor is posted
 -  an asynchronous `pvGet` or `pvPut` completes
 -  a `delay` timer expires
--  an event flag is set or cleared
+-  an `event flag` is set or cleared
 -  a process variable connects or disconnects
 
 While the sequencer's runtime system and the compiler work together to
@@ -1682,7 +1702,7 @@ An enumeration for status values.
    #define NOEVFLAG 0
 
 This can be given as second argument to `pvSync` (instead of
-an event flag) to cancel the sync.
+an `event flag`) to cancel the sync.
 
 
 .. _BuiltinFunctions:
@@ -1715,34 +1735,11 @@ clauses or only from action `statements`. It is safe to call them in another
 context, but the effect might not be what you expect.
 
 
-delay
-^^^^^
-
-.. c:function::
-   seqBool delay(double delay_in_seconds)
-
-Returns whether the specified time has elapsed since entering the
-state. It should be used only within a `transition` expression.
-
-The "t" state option (see `State Options`_) controls whether the
-delay is measured from when the current state was entered from a different
-state (`-t <state option -t>`) or from any state, including itself (`+t <state option +t>`,
-the default).
-
-.. versionchanged:: 2.2
-
-   It is no longer allowed to call this function outside the `condition` of a
-   `transition` clause.
-
-.. versionchanged:: 2.3
-
-   Due to internal restructurings in the compiler, it is no longer simple to
-   check from where built-in functions are called. The restriction has
-   therefore been lifted.
-
+Writing to Channels
+^^^^^^^^^^^^^^^^^^^
 
 pvPut
-^^^^^
+~~~~~
 
 .. c:function::
    enum pvStat pvPut(void pv channel, enum compType mode = DEFAULT, double timeout = 10.0)
@@ -1810,7 +1807,7 @@ is not very useful.
 
 
 pvPutComplete
-^^^^^^^^^^^^^
+~~~~~~~~~~~~~
 
 .. c:function::
    seqBool pvPutComplete(void pv channel)
@@ -1830,7 +1827,7 @@ Always returns `true` for anonymous PVs.
 
 
 pvArrayPutComplete
-^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~
 
 .. c:function::
    seqBool pvArrayPutComplete(void pv *channels, unsigned length, seqBool any = FALSE, seqBool *complete = NULL)
@@ -1851,7 +1848,7 @@ write the individual results for the array elements into this array.
 
 
 pvPutCancel
-^^^^^^^^^^^
+~~~~~~~~~~~
 
 .. c:function::
    void pvPutCancel(void pv channel)
@@ -1862,7 +1859,7 @@ Cancel a pending (asynchronous) `pvPut`.
 
 
 pvArrayPutCancel
-^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~
 
 .. c:function::
    void pvArrayPutCancel(void pv *channels, unsigned length)
@@ -1873,8 +1870,11 @@ Like `pvPutCancel` but all pending asynchronous `pvPut`\s to the first
 ``length`` elements of the array are cancelled.
 
 
+Reading from Channels
+^^^^^^^^^^^^^^^^^^^^^
+
 pvGet
-^^^^^
+~~~~~
 
 .. c:function::
    enum pvStat pvGet(void pv channel, enum compType ct = DEFAULT, double timeout = 10.0)
@@ -1918,7 +1918,7 @@ the request times out. This value overrides the default timeout of 10 seconds.
 
 
 pvGetComplete
-^^^^^^^^^^^^^
+~~~~~~~~~~~~~
 
 .. c:function::
    seqBool pvGetComplete(void pv channel)
@@ -1939,7 +1939,7 @@ Always returns `true` for anonymous PVs.
 
 
 pvArrayGetComplete
-^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~
 
 .. c:function::
    seqBool pvArrayGetComplete(void pv *channels, unsigned length, seqBool any = FALSE, seqBool *complete = NULL)
@@ -1951,7 +1951,7 @@ optional arguments have the same meaning as for `pvArrayPutComplete`.
 
 
 pvGetCancel
-^^^^^^^^^^^
+~~~~~~~~~~~
 
 .. c:function::
    void pvGetCancel(void pv channel)
@@ -1962,7 +1962,7 @@ Cancel a pending (asynchronous) `pvGet`.
 
 
 pvArrayGetCancel
-^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~
 
 .. c:function::
    void pvArrayGetCancel(void pv *channels, unsigned length)
@@ -1973,8 +1973,11 @@ Cancel pending (asynchronous) `pvGet` operations for the first ``length``
 elements of the array.
 
 
+Queue Operations
+^^^^^^^^^^^^^^^^
+
 pvGetQ
-^^^^^^
+~~~~~~
 
 .. c:function::
    seqBool pvGetQ(void pv channel)
@@ -1985,7 +1988,7 @@ The channel argument must have been associated with a queue using the
 If the queue is not empty, remove its first (oldest) value and update the
 variable with it. Returns whether there was an element in the queue (and the
 variable got updated). If an element gets removed, and the queue becomes
-empty as a result, then any event flag `sync`\ed to the variable will be
+empty as a result, then any `event flag` `sync`\ed to the variable will be
 cleared.
 
 Note that since pvGetQ may have a *side-effect* you should be careful when
@@ -2020,7 +2023,7 @@ that potentially has a side-effect.
 
 
 pvFreeQ
-^^^^^^^
+~~~~~~~
 
 .. c:function::
    void pvFreeQ(void pv channel)
@@ -2038,7 +2041,7 @@ is now an alias for pvFlushQ.
 
 
 pvFlushQ
-^^^^^^^^
+~~~~~~~~
 
 .. c:function::
    void pvFlushQ(queued_channel)
@@ -2056,8 +2059,11 @@ Flush the queue associated with this channel, so it is empty afterwards.
    in a compile-time error.
 
 
+Dynamic Channel Re-configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 pvAssign
-^^^^^^^^
+~~~~~~~~
 
 .. c:function::
    enum pvStat pvAssign(void pv channel, char *pv_name)
@@ -2115,7 +2121,7 @@ Like for all other operations, completion is immediate for anonymous PVs.
 
 
 pvAssignSubst
-^^^^^^^^^^^^^
+~~~~~~~~~~~~~
 
 .. c:function::
    enum pvStat pvAssignSubst(void pv channel, char *pv_name)
@@ -2125,7 +2131,7 @@ Like `pvAssign`, except that it substitutes program parameters, like the
 
 
 pvMonitor
-^^^^^^^^^
+~~~~~~~~~
 
 .. c:function::
    enum pvStat pvMonitor(void pv channel)
@@ -2141,7 +2147,7 @@ See `monitor` clause.
 
 
 pvArrayMonitor
-^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~
 
 .. versionadded:: 2.2
 
@@ -2155,7 +2161,7 @@ See `monitor` clause.
 
 
 pvStopMonitor
-^^^^^^^^^^^^^
+~~~~~~~~~~~~~
 
 .. c:function::
    enum pvStat pvStopMonitor(void pv channel)
@@ -2169,7 +2175,7 @@ Terminates a monitor on the underlying process variable.
 
 
 pvArrayStopMonitor
-^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~
 
 .. versionadded:: 2.2
 
@@ -2181,12 +2187,12 @@ elements of a channel array.
 
 
 pvSync
-^^^^^^
+~~~~~~
 
 .. c:function::
    void pvSync(channel ch, evflag ef)
 
-Synchronizes a variable with an event flag, or removes such a
+Synchronizes a variable with an `event flag`, or removes such a
 synchronization if ``ef`` is `NOEVFLAG`.
 
 See `sync` clause.
@@ -2198,7 +2204,7 @@ See `sync` clause.
 
 
 pvArraySync
-^^^^^^^^^^^
+~~~~~~~~~~~
 
 .. versionadded:: 2.2
 
@@ -2211,8 +2217,11 @@ flag, or removes such a synchronization if ``ef`` is `NOEVFLAG`.
 See `sync` clause.
 
 
+Channel Properties
+^^^^^^^^^^^^^^^^^^
+
 pvCount
-^^^^^^^
+~~~~~~~
 
 .. c:function::
    unsigned pvCount(channel ch)
@@ -2228,7 +2237,7 @@ be smaller or larger.
 
 
 pvStatus
-^^^^^^^^
+~~~~~~~~
 
 .. c:function::
    enum pvStat pvStatus(channel ch)
@@ -2248,7 +2257,7 @@ PV's properties (if a `pvPut` or `pvGet` operation completed, or the variable is
 
 
 pvSeverity
-^^^^^^^^^^
+~~~~~~~~~~
 
 .. c:function::
    pvSevr pvSeverity(channel ch)
@@ -2263,7 +2272,7 @@ or indicates failure of a previous PV operation.
 
 
 pvMessage
-^^^^^^^^^
+~~~~~~~~~
 
 .. c:function::
    const char *pvMessage(channel ch)
@@ -2278,7 +2287,7 @@ if none is available.
 
 
 pvTimeStamp
-^^^^^^^^^^^
+~~~~~~~~~~~
 
 .. c:function::
    struct epicsTimeStamp pvTimeStamp(channel ch)
@@ -2298,7 +2307,7 @@ code.
 
 
 pvAssigned
-^^^^^^^^^^
+~~~~~~~~~~
 
 .. c:function::
    seqBool pvAssigned(channel ch)
@@ -2313,7 +2322,7 @@ Note that this function returns ``FALSE`` for anonymous PVs.
 
 
 pvConnected
-^^^^^^^^^^^
+~~~~~~~~~~~
 
 .. c:function::
    seqBool pvConnected(channel ch)
@@ -2329,7 +2338,7 @@ Returns whether the underlying process variable is currently connected.
 
 
 pvArrayConnected
-^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~
 
 .. versionadded:: 2.2
 
@@ -2340,7 +2349,7 @@ Returns whether elements of a channel array are currently connected.
 
 
 pvIndex
-^^^^^^^
+~~~~~~~
 
 .. c:function::
    unsigned pvIndex(channel ch)
@@ -2354,8 +2363,93 @@ Returns the index associated with a variable. See
    in a compile-time error.
 
 
+Event Flag Operations
+^^^^^^^^^^^^^^^^^^^^^
+
+efSet
+~~~~~
+
+.. c:function::
+   void efSet(evflag ef)
+
+Sets the `event flag` and causes evaluation of the `transition`
+clauses for all state sets that are pending on this `event flag`.
+
+
+efClear
+~~~~~~~
+
+.. c:function::
+   seqBool efClear(evflag ef)
+
+Clears the `event flag` and causes evaluation of the `transition`
+clauses for all state sets that are pending on this `event flag`.
+
+
+efTest
+~~~~~~
+
+.. c:function::
+   seqBool efTest(evflag ef)
+
+Returns whether the `event flag` was set.
+
+.. note::
+
+   In safe mode, this function is a synchronization point for all
+   variables (channels) that are `sync`\ed with it, i.e. the
+   state set local copy of these variables will be updated from their
+   current globally visible value.
+
+
+efTestAndClear
+~~~~~~~~~~~~~~
+
+.. c:function::
+   seqBool efTestAndClear(evflag ef)
+
+Clears the `event flag` and returns whether the event
+flag was set. It is intended for use within a `transition` clause.
+
+.. note::
+
+   In safe mode, this function is a synchronization point for all
+   variables (channels) that are `sync`\ed with it, i.e. the
+   state set local copy of these variables will be updated from their
+   current globally visible value.
+
+
+Miscellaneous
+^^^^^^^^^^^^^
+
+delay
+~~~~~
+
+.. c:function::
+   seqBool delay(double delay_in_seconds)
+
+Returns whether the specified time has elapsed since entering the
+state. It should be used only within a `transition` expression.
+
+The "t" state option (see `State Options`_) controls whether the
+delay is measured from when the current state was entered from a different
+state (`-t <state option -t>`) or from any state, including itself (`+t <state option +t>`,
+the default).
+
+.. versionchanged:: 2.2
+
+   It is no longer allowed to call this function outside the `condition` of a
+   `transition` clause.
+
+.. versionchanged:: 2.3
+
+   Due to internal restructurings in the compiler, it is no longer simple to
+   check from where built-in functions are called. The restriction has
+   therefore been lifted.
+
+
 pvFlush
-^^^^^^^
+~~~~~~~
 
 .. c:function::
    void pvFlush()
@@ -2372,7 +2466,7 @@ and ``pvGet(var,SYNC)``).
 
 
 pvChannelCount
-^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~
 
 .. c:function::
    unsigned pvChannelCount()
@@ -2382,7 +2476,7 @@ associated with the program.
 
 
 pvAssignCount
-^^^^^^^^^^^^^
+~~~~~~~~~~~~~
 
 .. c:function::
    unsigned pvAssignCount()
@@ -2400,7 +2494,7 @@ Each element of an SNL array counts as variable for the purposes of
 
 
 pvConnectCount
-^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~
 
 .. c:function::
    unsigned pvConnectCount()
@@ -2414,61 +2508,8 @@ expression is `true`::
    pvConnectCount() == pvAssignCount()
 
 
-efSet
-^^^^^
-
-.. c:function::
-   void efSet(evflag ef)
-
-Sets the event flag and causes evaluation of the `transition`
-clauses for all state sets that are pending on this event flag.
-
-
-efClear
-^^^^^^^
-
-.. c:function::
-   seqBool efClear(evflag ef)
-
-Clears the event flag and causes evaluation of the `transition`
-clauses for all state sets that are pending on this event flag.
-
-
-efTest
-^^^^^^
-
-.. c:function::
-   seqBool efTest(evflag ef)
-
-Returns whether the event flag was set.
-
-.. note::
-
-   In safe mode, this function is a synchronization point for all
-   variables (channels) that are `sync`\ed with it, i.e. the
-   state set local copy of these variables will be updated from their
-   current globally visible value.
-
-
-efTestAndClear
-^^^^^^^^^^^^^^
-
-.. c:function::
-   seqBool efTestAndClear(evflag ef)
-
-Clears the event flag and returns whether the event
-flag was set. It is intended for use within a `transition` clause.
-
-.. note::
-
-   In safe mode, this function is a synchronization point for all
-   variables (channels) that are `sync`\ed with it, i.e. the
-   state set local copy of these variables will be updated from their
-   current globally visible value.
-
-
 macValueGet
-^^^^^^^^^^^
+~~~~~~~~~~~
 
 .. c:function::
    char* macValueGet(char *parameter_name)
@@ -2539,7 +2580,7 @@ imagine such channels to be connected to "virtual" PVs that are implemented
 inside the sequencer's run time system.
 
 Anonymous channels should work exactly like channels assigned to a "real" PV
--- they can be `monitor`\ed, `sync`\ed to event flags etc. -- except that
+-- they can be `monitor`\ed, `sync`\ed to `event flag`\ss etc. -- except that
 they are always connected and the operations on them always complete
 immediately.
 
@@ -2547,10 +2588,10 @@ Event Flags in Safe Mode
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 Apart from the `sync` and `syncq` features, and apart from the atomicity of
-`efTestAndClear`, an event flag behaves like an anonymous PV of boolean type
+`efTestAndClear`, an `event flag` behaves like an anonymous PV of boolean type
 with a monitor. In safe mode, `efTest` and `efTestAndClear` have the
 additional side-effect of acting as a synchronization point for all
-variables that are `sync`\ed with the event flag.
+variables that are `sync`\ed with the `event flag`.
 
 
 Foreign Variables and Functions
