@@ -2471,8 +2471,8 @@ pvChannelCount
 .. c:function::
    unsigned pvChannelCount()
 
-Returns the total number of process variables
-associated with the program.
+Returns the total number of channels (named or anonymous) in the program. It
+never changes during the program run.
 
 
 pvAssignCount
@@ -2481,16 +2481,13 @@ pvAssignCount
 .. c:function::
    unsigned pvAssignCount()
 
-Returns the total number of SNL variables in this
-program that are assigned to underlying process variables.
+Returns the total number of channels in this program that are assigned to
+named process variables.
 
-For instance, if all SNL variables are assigned then the following
-expression is `true`::
+If all channels are assigned to named `PV`s then the following expression is
+`true`::
 
    pvAssignCount() == pvChannelCount()
-
-Each element of an SNL array counts as variable for the purposes of
-`pvAssignCount`.
 
 
 pvConnectCount
@@ -2499,11 +2496,15 @@ pvConnectCount
 .. c:function::
    unsigned pvConnectCount()
 
-Returns the total number of underlying process
-variables that are connected.
+Returns the total number of channels that are connected to a named `PV`.
 
-For instance, if all assigned variables are connected then the following
-expression is `true`::
+.. note::
+
+   For backwards compatibility, this number does not include anonymous
+   channels, even though `pvConnected` returns `true` for them.
+
+If all channels that are assigned to named `PV`\s are connected then the
+following expression is `true`::
 
    pvConnectCount() == pvAssignCount()
 
@@ -2514,8 +2515,15 @@ macValueGet
 .. c:function::
    char* macValueGet(char *parameter_name)
 
-Returns a pointer to the value of the specified program parameter, if
-it exists, else ``NULL``. See `Program Name and Parameters`_.
+Returns a pointer to the value of the specified program parameter (see
+`Program Name and Parameters`_), if it exists, else ``NULL``.
+
+.. note::
+
+   The return value points to memory allocated once when the program is
+   started and the parameters are read. It you modify it, the effect will
+   persist for the rest of the program, including further calls to
+   `macValueGet` and `pvAssignSubst`.
 
 
 .. _safe mode:
