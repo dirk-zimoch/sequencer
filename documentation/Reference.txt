@@ -1978,14 +1978,15 @@ elements of the array.
 Queue Operations
 ^^^^^^^^^^^^^^^^
 
+For these functions, the channel argument must be associated with a queue
+using `syncq` (in a channel configuration clause or a pv initializer
+argument).
+
 pvGetQ
 ~~~~~~
 
 .. c:function::
    seqBool pvGetQ(void pv channel)
-
-The channel argument must have been associated with a queue using the
-`syncq` clause or a `syncq` pv initializer argument.
 
 If the queue is not empty, remove its first (oldest) value and update the
 variable with it. Returns whether there was an element in the queue (and the
@@ -2030,9 +2031,6 @@ pvFreeQ
 .. c:function::
    void pvFreeQ(void pv channel)
 
-The channel argument must have been associated with a queue using the
-`syncq` clause or a `syncq` pv initializer argument.
-
 Deletes all entries from the channel's queue and clears the associated event
 flag.
 
@@ -2049,9 +2047,6 @@ pvFlushQ
    void pvFlushQ(queued_channel)
 
 .. versionadded:: 2.1
-
-The channel argument must have been associated with a queue using the
-`syncq` clause or a `syncq` pv initializer argument.
 
 Flush the queue associated with this channel, so it is empty afterwards.
 
