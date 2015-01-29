@@ -2060,8 +2060,10 @@ Flush the queue associated with this channel, so it is empty afterwards.
    in a compile-time error.
 
 
-Dynamic Channel Re-configuration
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Channel Re-configuration
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+These functions allow channels to be re-configured at runtime.
 
 pvAssign
 ~~~~~~~~
