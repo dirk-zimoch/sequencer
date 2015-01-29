@@ -193,7 +193,7 @@ executed at each `transition` from/to a new state.)
 
 The entry or exit code is a regular SNL code block and thus can contain local
 variable declarations. Top-level entry code is always executed after initiating
-connections to (named) PVs, and exit code is executed before connections are
+connections to (named) `PV`\s, and exit code is executed before connections are
 shut down. Furthermore, if the global `+c` option is in effect, the
 entry code is executed only after all channels are connected and monitored
 channels have received their first monitor event. All built-in PV functions
@@ -582,7 +582,7 @@ recommend not to rely too much on the numeric value. (You can use
 
    In SNL declarations and type expressions, ``string`` is *not* treated as
    a type synonym for ``char [MAX_STRING_SIZE]``, but as a primitive type.
-   This has consequences when it comes to interacting with named PVs: a
+   This has consequences when it comes to interacting with named `PV`\s: a
    channel with value type ``string`` is requested with type DBR_STRING and
    a count of one, while the ``char`` array would be requested with type
    DBR_CHAR and a count of ``MAX_STRING_SIZE``.
@@ -606,7 +606,7 @@ and `efTestAndClear`.
 An event flag ``e`` can act as a binary semaphore, allowing exactly one
 state set to continue, if ``when(efTestAndClear(e))`` is used to wait
 and ``efSet(e)`` to signal. Event flags can be coupled to changes of a
-PV using the `sync` clause, so that the flag gets set whenever
+`PV` using the `sync` clause, so that the flag gets set whenever
 an event happens.
 
 See `EventFlags` for motivation and examples.
@@ -728,7 +728,8 @@ whereas the one for ``y`` is the same as ::
    This use of the `assign` clause to "retro-fit" the pv type constructor
    into the type of a variable is strongly discouraged for new programs. Its
    sole purpose is backward compatibility for old programs and it works only
-   in those cases where an `assign` was allowed previously (i.e. single PVs
+   in those cases where an `assign` was allowed previously (i.e. single
+   channels
    and one-dimensional arrays of them). It will be officially deprecated in
    the next version, causing a compiler warning. (In version 2.3, a warning
    is issued only if extra warnings are enabled.)
@@ -857,11 +858,11 @@ monitored, synced etc. If they have an initializer, they will be initialized
 only once when the program starts.
 
 Variables declared local to an action block or a compound statement behave
-exactly as in C. They can *not* be assigned to a PV; and (if they have an
+exactly as in C. They can *not* be assigned to a `PV`; and (if they have an
 initializer) they become re-initialized each time the block is entered.
 
 The rationale for this is that, while bringing a normal variable into and
-out of scope is a very cheap operation, establishing a connection to a PV is
+out of scope is a very cheap operation, establishing a connection to a `PV` is
 not.
 
 Channel Configuration
@@ -905,18 +906,18 @@ an aggregate of pv name expressions enclosed in curly braces. The latter is
 a subset of the `pv_init_expr` syntax, restricted to pv names (i.e. not
 allowing optional monitor or sync specifications).
 
-In an aggregate pv initializer, if the number of PV names does not match the
+In an aggregate pv initializer, if the number of `PV` names does not match the
 number of elements in the array or the number of members of a struct, then
 the rule is that
 
-* missing PV names default to "",
+* missing `PV` names default to "",
 
-* excess PV names are discarded.
+* excess `PV` names are discarded.
 
 .. versionadded:: 2.1
 
 The second variant serves as an abbreviation for the first variant, in the
-special case where the PV name is empty (``""``).
+special case where the `PV` name is empty (``""``).
 
 Assigned variables must be of global life time, see
 `variable scope`. Assigned variables, or separately assigned
@@ -924,7 +925,7 @@ elements of an array, can be used as argument to built-in ``pvXXX``
 procedures (see `Built-in Functions`_). This is the primary means of
 interacting with process variables from within an SNL program.
 
-Only certain types of variables can be assigned to a PV: allowed
+Only certain types of variables can be assigned to a `PV`: allowed
 are numeric types (char, short, int, long, and their unsigned variants)
 and strings (these are sometimes referred to as *scalar types*), as well
 as one or two dimensional arrays of these.
@@ -943,7 +944,7 @@ If the process variable name (after expansion) is an empty string, then no
 actual assignment to any process variable is performed, but the variable
 is marked for potential (dynamic) assignment with `pvAssign`.
 
-.. note:: An `assign` clause using an empty string for the PV name is
+.. note:: An `assign` clause using an empty string for the `PV` name is
    interpreted differently in `safe mode`, see `anonymous pvs`.
 
 An array variable assigned wholesale to one process variable (using
@@ -953,7 +954,7 @@ two-dimensional variable assigned to an array process variable
 the array or the native count for the underlying process
 variable, whichever is smaller, when communicating with the
 underlying process variable. The native count is determined when a
-connection is established. For anonymous PVs, the length of the array is
+connection is established. For `anonymous channel`\s, the length of the array is
 used.
 
 
@@ -968,7 +969,7 @@ denotes the variable's part must be of pv type.
 
 Monitored variables are automatically updated whenever the underlying
 process variable changes its value. Note, however, that this depends on
-the configuration of the underlying PV: some PVs post an update event
+the configuration of the underlying `PV`: some PVs post an update event
 only if the value changes by at least a certain amount. Also, events may
 be posted, even if no actual change happens, i.e. the value remains the
 same. The details can be found in the `EPICS Record Reference Manual`_.
@@ -1031,7 +1032,7 @@ maximum number of elements that can be stored in the queue. A
 missing size means that it defaults to 100 elements. The variable can
 be an array, and may be associated with multiple process variables, in
 which case there is still only one queue, but any change in any of the
-involved PVs will add an entry to the queue.
+involved `PV`\s will add an entry to the queue.
 
 .. versionadded:: 2.1
 
@@ -1044,7 +1045,7 @@ Not giving a queue size (thus relying on the default of 100 elements)
 is now *deprecated* and the compiler will issue a warning. The reason
 for this is that queues are now statically allocated, which can result
 in a large memory overhead especially if the variable is an array
-associated with a single PV. (A default queue size of 1 would be much
+associated with a single `PV`. (A default queue size of 1 would be much
 more useful, but for compatibility I kept it at 100 as in previous
 versions.)
 
@@ -1785,17 +1786,18 @@ are equivalent. Whereas in ::
    pvPut(var,ASYNC);
    pvPut(var,ASYNC);
 
-the second pvPut may fail if it is a named PV located on another IOC (since
-the first one is still awaiting completion), whereas for local named PVs and
-anonymous PVs it will succeed (since completion is immediate in these cases).
+the second pvPut may fail if it is a named `PV` located on another IOC (since
+the first one is still awaiting completion), whereas for local named PVs
+(and of course for `anonymous channel`\s) it will succeed (since completion
+is immediate in these cases).
 
-In `safe mode`, `pvPut` can be used with anonymous PVs (variables assigned
+In `safe mode`, `pvPut` can be used with `anonymous channel`\s (variables assigned
 to "") to communicate between state sets. This makes sense only with global
 variables as only those can be referenced in more than one state set. The
-behaviour for anonymous PVs exactly mirrors that of named PVs, including the fact
+behaviour for `anonymous channel`\s exactly mirrors that of named PVs, including the fact
 that the new value will not be seen by other state sets until they issue a pvGet,
 or, if the variable is monitored, until they wait for an event in a `condition`.
-Note that for anonymous PVs completion is always immediate, so the `ASYNC <compType>` option
+Note that for `anonymous channel`\s completion is always immediate, so the `ASYNC <compType>` option
 is not very useful.
 
 .. versionchanged:: 2.2
@@ -1815,7 +1817,7 @@ pvPutComplete
 Returns whether the last asynchronous `pvPut` to this process variable has
 completed.
 
-Always returns `true` for anonymous PVs.
+Always returns `true` for `anonymous channel`\s.
 
 .. versionchanged:: 2.2
 
@@ -1898,7 +1900,7 @@ In `safe mode`, if `ASYNC <compType>` is specified and the variable is not
 monitored, then the state set local copy of the variable will not be updated
 until a call to pvGetComplete is made and returns `true` or, if the
 variable is monitored, until the state set waits for events in a `transition`
-clause. Note that anonymous PVs behave exactly in the same way.
+clause. Note that `anonymous channel`\s behave exactly in the same way.
 
 Like for `pvPut`, only one pending `pvGet` per channel and state set can be
 active.
@@ -1929,7 +1931,7 @@ In `safe mode`, the the state set local copy of the variable will be
 updated with the value from the PV layer as a side effect of this call
 (if `true` is returned).
 
-Always returns `true` for anonymous PVs.
+Always returns `true` for `anonymous channel`\s.
 
 .. versionchanged:: 2.2
 
@@ -2070,8 +2072,8 @@ pvAssign
 
 Assigns or re-assigns ``ch`` to a process variable with name ``pv_name``. If
 ``pv_name`` is an empty string or ``NULL``, then ``ch`` is de-assigned (not
-associated with any process variable); in `safe mode` it causes assignment
-to an anonymous PV.
+associated with any process variable); in `safe mode` it creates
+an `anonymous channel`.
 
 See also `assign` clause.
 
@@ -2083,7 +2085,7 @@ is assigned to. In order to make sure that it has connected to the new PV,
 you can use the `pvConnected` built-in function inside a `transition`
 clause.
 
-Like for all other operations, completion is immediate for anonymous PVs.
+Like for all other operations, completion is immediate for `anonymous channel`\s.
 
 .. todo::
 
@@ -2313,7 +2315,7 @@ pvAssigned
    seqBool pvAssigned(channel ch)
 
 Returns whether the SNL variable is currently assigned to a process variable.
-Note that this function returns ``FALSE`` for anonymous PVs.
+Note that this function returns ``FALSE`` for `anonymous channel`\s.
 
 .. versionchanged:: 2.2
 
@@ -2331,7 +2333,7 @@ Returns whether the underlying process variable is currently connected.
 
 .. versionchanged:: 2.2
 
-   Always returns `true` for anonymous PVs.
+   Always returns `true` for `anonymous channel`\s.
 
    Calling this function with a multi-PV array is no longer allowed and results
    in a compile-time error.
@@ -2596,7 +2598,7 @@ Event Flags in Safe Mode
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 Apart from the `sync` and `syncq` features, and apart from the atomicity of
-`efTestAndClear`, an `event flag` behaves like an anonymous PV of boolean type
+`efTestAndClear`, an `event flag` behaves like an `anonymous channel` of boolean type
 with a monitor. In safe mode, `efTest` and `efTestAndClear` have the
 additional side-effect of acting as a synchronization point for all
 variables that are `sync`\ed with the `event flag`.
@@ -2620,8 +2622,7 @@ this is usually done by adding a line ::
 
 (See also `Preprocessor Directives`.)
 
-Note that when passing channel variables (i.e. ones assigned to one or more
-PVs using an `assign` clause) to a C function, only the *value* is
+Note that when passing channels to a C function, only the *value* is
 passed. The special assigned" status of the variable gets lost as soon as
 the function is entered (same as for functions defined in SNL).
 

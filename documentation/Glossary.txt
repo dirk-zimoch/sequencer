@@ -37,12 +37,27 @@ Glossary of Terms
 
       A mutable variable that is globally visible and accessible via some
       network protocol in a distributed control system, such as one based on
-      `EPICS`.
+      `EPICS`. PVs are identified by their name, which must be unique.
+
+   anonymous channel
+
+      Pseudo `channel`\s for communication between state sets inside the
+      same instance of a running SNL program. Can be thought of as a
+      `channel` to an `anonymous PV`. Available only in `safe mode`, see
+      `Anonymous Channels`.
+
+   anonymous PV
+
+      Conceptually something like a "virtual" unnamed `PV`. These do not
+      really exist, but are a useful fiction when thinking about `anonymous
+      channel`\s.
 
    channel
 
-      A connection that allows communication (read, write, monitor) with a
-      `process variable`.
+      In general, a connection that allows communication (read, write,
+      monitor) with a `process variable`. In SNL this term is also used for
+      variables (or parts of them) that have a pv type, so they can be
+      `assign`\ed to a `PV`.
 
    CA
    Channel Access
