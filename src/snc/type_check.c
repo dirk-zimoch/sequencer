@@ -235,3 +235,32 @@ Type *type_of(Node *e)
         return e->type = no_type;
     }
 }
+
+int pv_type_check(Type *expected, Type *inferred)
+{
+    switch (expected->tag)
+    {
+    case T_NONE:
+        /* if this is due to an earlier type error, don't bother */
+        return TRUE;
+    case T_PV:
+        return inferred->tag == T_PV && pv_type_check(
+            expected->val.pv.value_type, inferred->val.pv.value_type);
+    case T_PRIM:
+        return inferred->tag == T_PRIM && expected->val.prim == inferred->val.prim;
+    case T_ARRAY:
+        return inferred->tag == T_ARRAY && pv_type_check(
+            expected->val.array.elem_type, inferred->val.array.elem_type);
+    case T_POINTER:
+        return (inferred->tag == T_ARRAY && pv_type_check(
+                expected->val.pointer.value_type, inferred->val.array.elem_type))
+            || (inferred->tag == T_POINTER && pv_type_check(
+                expected->val.pointer.value_type, inferred->val.pointer.value_type));
+    case T_VOID:
+        return type_is_valid_pv_child(inferred);
+    default:
+        dump_type(expected, 0);
+        assert(impossible);
+        return FALSE;
+    }
+}
