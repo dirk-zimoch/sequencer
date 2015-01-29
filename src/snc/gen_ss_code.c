@@ -705,9 +705,16 @@ static void gen_expr(
 		gen_code(")");
 		break;
 	case E_CAST:
-		gen_code("(");
-		gen_var_decl(ep->cast_type->extra.e_decl);
-		gen_code(")");
+		if (type_contains_pv(ep->cast_type->extra.e_decl->type))
+		{
+			error_at_node(ep, "cast to pv type not allowed\n");
+		}
+		else
+		{
+			gen_code("(");
+			gen_var_decl(ep->cast_type->extra.e_decl);
+			gen_code(")");
+		}
 		/* TODO: is it correct to expect the cast type or should this be no_type? */
 		gen_expr(context, ep->cast_type->extra.e_decl->type, ep->cast_operand, level);
 		break;

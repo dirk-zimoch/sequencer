@@ -1499,6 +1499,10 @@ Prefix operators are right-associative.
    expr: "sizeof" "(" `type_expr` ")"
    expr: "sizeof" `expr`
 
+.. versionchanged:: 2.3
+
+   Type casts involving the "pv" type constructor are not allowed.
+
 Binary Operators
 ~~~~~~~~~~~~~~~~
 
