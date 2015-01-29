@@ -145,7 +145,7 @@ Type *type_of(Node *e)
     case E_PAREN:                       /* parenthesis around an expression [expr] */
         return e->type = type_of(e->paren_expr);
     case E_POST:                        /* unary postfix operator [operand] */
-        return e->type = type_of(e->post_operand);
+        return e->type = strip_pv_type(type_of(e->post_operand));
     case E_PRE:                         /* unary prefix operator [operand] */
         t = type_of(e->pre_operand);
         switch (e->token.symbol) {
