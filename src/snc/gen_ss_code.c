@@ -877,7 +877,7 @@ static void gen_channel_init(uint context, Chan *cp)
 #endif
 
 	indent(1);
-	gen_expr(context, mk_pv_type(mk_no_type()), cp->expr, 0);
+	gen_expr(context, mk_pv_type(mk_void_type()), cp->expr, 0);
 
 	/* program instance */
 	gen_code(" = seq_pvCreate("NM_ENV", ");
@@ -916,7 +916,7 @@ static void gen_channel_init(uint context, Chan *cp)
 
 	/* event flag expression if synced, else NOEVFLAG */
 	if (cp->sync)
-		gen_expr(context, mk_void_type(), cp->sync->expr, 0);
+		gen_expr(context, mk_ef_type(), cp->sync->expr, 0);
 	else
 		gen_code("NOEVFLAG");
 
@@ -933,7 +933,7 @@ static void gen_channel_init(uint context, Chan *cp)
 	{
 		indent(1);
 		gen_code("seq_pvAddMonitor("NM_ENV", ");
-		gen_expr(context, mk_pv_type(mk_no_type()), cp->expr, 0);
+		gen_expr(context, mk_pv_type(mk_void_type()), cp->expr, 0);
 		gen_code(", %d);\n", (mp->scope->tag == D_PROG) ? UINT_MAX : mp->scope->extra.e_ss->index);
 	}
 }
