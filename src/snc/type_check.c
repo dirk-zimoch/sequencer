@@ -153,12 +153,9 @@ Type *type_of(Node *e)
         case TOK_SUB:
             return e->type = strip_pv_type(t);
         case TOK_ASTERISK:
-            if (t->tag == T_POINTER) {
-                return e->type = t->val.pointer.value_type;
-            } else if (t->tag == T_ARRAY) {
-                return e->type = t->val.array.elem_type;
-            } else if (t->tag == T_PRIM && t->val.prim == P_STRING) {
-                return e->type = char_type;
+            t = type_is_pointer(t);
+            if (t) {
+                return e->type = t;
             } else {
                 return e->type = no_type;
             }
@@ -200,18 +197,10 @@ Type *type_of(Node *e)
     case E_STRING:                      /* string constant [] */
         return e->type = mk_pointer_type(mk_const_type(char_type));
     case E_SUBSCR:                      /* subscripted expr [operand,index] */
-        t = strip_pv_type(type_of(e->subscr_operand));
-        switch (t->tag) {
-        case T_ARRAY:
-            return e->type = t->val.array.elem_type;
-        case T_POINTER:
-            return e->type = t->val.pointer.value_type;
-        case T_PRIM:
-            if (t->val.prim == P_STRING)
-                return e->type = char_type;
-            else
-                return e->type = no_type;
-        default:
+        t = type_is_pointer(strip_pv_type(type_of(e->subscr_operand)));
+        if (t) {
+            return e->type = t;
+        } else {
             error_at_node(e->subscr_operand, "subscript operand has wrong type\n");
             return e->type = no_type;
         }

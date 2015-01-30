@@ -94,7 +94,8 @@ Type *type_contains_pv(Type *t);
     (t)->val.pointer.value_type : 0)
 
 #define type_is_pointer(t) ((t)->tag == T_POINTER ? (t)->val.pointer.value_type :\
-    (t)->tag == T_ARRAY ? (t)->val.array.elem_type : 0)
+    (t)->tag == T_ARRAY ? (t)->val.array.elem_type :\
+    ((t)->tag == T_PRIM && (t)->val.prim == P_STRING) ? mk_prim_type(P_CHAR) : 0)
 
 #define strip_pv_type(t) ((t)->tag == T_PV ? (t)->val.pv.value_type : (t))
 

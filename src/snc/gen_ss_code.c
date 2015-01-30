@@ -783,12 +783,8 @@ static void gen_expr(
 			gen_expr(context, mk_pointer_type(expected), ep->pre_operand, level);
 			break;
 		case TOK_AMPERSAND:
-			if (expected->tag == T_POINTER)
-				expected = expected->val.pointer.value_type;
-			else if (expected->tag == T_ARRAY)
-				expected = expected->val.array.elem_type;
-			else if (expected->tag == T_PRIM && expected->val.prim == P_STRING)
-				expected = mk_prim_type(P_CHAR);
+			if (type_is_pointer(expected))
+				expected = type_is_pointer(expected);
 			if (ctxTest(context, C_REENT))
 				gen_expr(context, expected, ep->pre_operand, level);
 			else
