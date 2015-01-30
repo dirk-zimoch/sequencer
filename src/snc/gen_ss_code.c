@@ -88,6 +88,7 @@ enum context_flag
 	C_CHID,		/* expected channel id */
 	C_PLAIN,	/* generate variable(s) as in SNL */
 	C_REENT,	/* reentrant option is active */
+	C_LAX,		/* lax type checking a la C */
 };
 
 #define ctxClear(ctx,flag)	( (ctx) & (~(1u<<(flag+16))) )
@@ -97,14 +98,15 @@ enum context_flag
 
 void dump_ctx(uint context)
 {
-	report("%s%s%s%s%s%s%s",
+	report("%s%s%s%s%s%s%s%s",
 		ctxTest(context,C_COND)?"O":"",
 		ctxTest(context,C_TRANS)?"T":"",
 		ctxTest(context,C_FUNC)?"F":"",
 		ctxTest(context,C_STATIC)?"S":"",
 		ctxTest(context,C_CHID)?"C":"",
 		ctxTest(context,C_PLAIN)?"P":"",
-		ctxTest(context,C_REENT)?"R":"");
+		ctxTest(context,C_REENT)?"R":"",
+		ctxTest(context,C_LAX)?"X":"");
 }
 
 unsigned default_context(Options *options)
@@ -596,15 +598,28 @@ static void gen_expr(
 			   expressions that have pv type */
 			gen_type(mk_pointer_type(inferred), "", "");
 			gen_code(", ");
-			gen_expr(context, mk_pv_type(expected), ep, level);
+			gen_expr(ctxSet(context,C_LAX), mk_pv_type(expected), ep, level);
 			gen_code(")");
 		}
 		return;
 	}
-	else if (expected->tag == T_PV && inferred->tag != T_PV)
+	else if (expected->tag == T_PV)
 	{
-		error_at_node(ep, "expected pv type\n");
-		return;
+		/* For pv types, we must check for an exact match (modulo void). */
+#ifdef DEBUG
+		report_at_node(ep, "checking pv type, expected:\n");
+		dump_type (expected, 1);
+		report_at_node(ep, "got:\n");
+		dump_type (inferred, 1);
+#endif
+		if (!ctxTest(context, C_LAX) && !pv_type_check(expected, inferred))
+		{
+			error_at_node(ep, "type mismatch, expected:\n");
+			dump_type (expected, 1);
+			report_at_node(ep, "got:\n");
+			dump_type (inferred, 1);
+			return;
+		}
 	}
 
 	switch(ep->tag)
