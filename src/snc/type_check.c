@@ -172,13 +172,6 @@ Type *type_of(Node *e)
             return e->type = strip_pv_type(t);
         case TOK_SIZEOF:
             return e->type = num_type;
-#if 0
-        case TOK_PV:    /* pv initializer */
-            /* note: we intentionally do not return a pv type here, because the code that gets
-               generated here is a dummy (zero) initializer and thus shouldn't be wrapped with
-               seq_pvValue() */
-            return e->type = num_type;
-#endif
         default:
             dump_node(e, 0);
             assert(impossible);
