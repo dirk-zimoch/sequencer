@@ -872,10 +872,11 @@ static void gen_channel_init(uint context, Chan *cp)
 	dump_type(type_of(cp->expr), 1);
 #endif
 
+	/* left hand side (the channel object) */
 	indent(1);
 	gen_expr(context, mk_pv_type(mk_void_type()), cp->expr, 0);
 
-	/* program instance */
+	/* right hand side starts with the call */
 	gen_code(" = seq_pvCreate("NM_ENV", ");
 
 	/* index of channel; assigned channel name */
@@ -889,14 +890,13 @@ static void gen_channel_init(uint context, Chan *cp)
 		gen_code("offsetof(struct %s, ", NM_VARS);
 	else
 		gen_code("(size_t)&");
-
-	/* note: no C_REENT in context */
+	/* note: must remove C_REENT from the context here */
 	gen_expr(ctxClear(context, C_REENT), mk_void_type(), cp->expr, 0);
-
 	if (ctxTest(context, C_REENT))
 		gen_code(")");
 
-	/* channel expression */
+	/* channel expression as a string literal for use by the
+	   runtime library (e.g. for error messages) */
 	gen_code(", \"");
 	/* note: no C_REENT in context */
 	gen_expr(ctxClear(ctxSet(context,C_PLAIN),C_REENT), mk_void_type(), cp->expr, 0);
