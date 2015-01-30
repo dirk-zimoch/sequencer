@@ -22,7 +22,7 @@ monitor pv_a_i;
 syncq pv_i 10;
 
 entry {
-    seq_test_init(18);
+    seq_test_init(22);
 }
 
 #define testOk1(cond) testOk(cond, "%s", #cond)
@@ -57,8 +57,9 @@ ss set {
             testDiag("a_pv_i[0]==*a_pv_i -> %d", a_pv_i[0]==*a_pv_i);
             testDiag("pv_a_i[0]=pv_i -> %d", pv_a_i[0]=pv_i);
 
-            testDiag("pv_a_i[0]=a_pv_i[1] -> %d", pv_a_i[0]=a_pv_i[1]);
-            testDiag("pv_a_i[1]=a_pv_i[2] -> %d", pv_a_i[1]=a_pv_i[2]);
+            testOk1((pv_a_i[0]=a_pv_i[1]) == 2);
+            testOk1((pv_a_i[1]=a_pv_i[2]+1) == 3);
+            testPvAi(pv_a_i);
 
             testDiag("p_pv_i=&(a_pv_i[0]) -> %p", p_pv_i=&(a_pv_i[0]));
             testDiag("*(p_pv_i+1) -> %d", *(p_pv_i+1));
@@ -131,4 +132,10 @@ void pvSetInts(int pv *x, int n, int v)
 	%%testDiag("pvSetInts(): i=%d, seqg_chid_x[i]=%p, v=%d", i, seqg_chid_x[i], v);
         pvSetInt(x[i], v);
     }
+}
+
+void testPvAi(int (pv pv_a_i)[2])
+{
+    testOk1((pv_a_i[0]=a_pv_i[1]) == 2);
+    testOk1((pv_a_i[1]=a_pv_i[2]+1) == 3);
 }
