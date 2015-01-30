@@ -22,7 +22,7 @@ monitor pv_a_i;
 syncq pv_i 10;
 
 entry {
-    seq_test_init(21);
+    seq_test_init(18);
 }
 
 #define testOk1(cond) testOk(cond, "%s", #cond)
@@ -77,11 +77,13 @@ ss set {
             testOk1(a_pv_i[1]==4);
             testOk1(a_pv_i[2]==4);
 
+#if 0 /* dirty conversion no longer allowed due to fix in the type checker */
             p_pv_i = &pv_a_i;
             pvSetInts(a_pv_i, 3, 5);
             testOk1(a_pv_i[0]==5);
             testOk1(a_pv_i[1]==5);
             testOk1(a_pv_i[2]==5);
+#endif
 #if 0
             /* C compiler correctly warns:
                 expected 'struct channel **' but argument is of type 'int' */
