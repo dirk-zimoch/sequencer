@@ -579,7 +579,6 @@ static void gen_expr(
 		/* optimisation: access C variable directly */
 		/* note: this also allows certain initialisers to be static */
 		if (ep->tag == E_VAR && (
-			!type_contains_pv(ep->extra.e_var->type) ||
 			ep->extra.e_var->scope->tag == D_PROG ||
 			ep->extra.e_var->scope->tag == D_SS ||
 			ep->extra.e_var->scope->tag == D_STATE
