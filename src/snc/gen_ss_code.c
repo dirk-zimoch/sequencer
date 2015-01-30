@@ -898,10 +898,9 @@ static void gen_channel_init(uint context, Chan *cp)
 	/* channel expression as a string literal for use by the
 	   runtime library (e.g. for error messages) */
 	gen_code(", \"");
-	/* note: no C_REENT in context */
-	gen_expr(ctxClear(ctxSet(context,C_PLAIN),C_REENT), mk_void_type(), cp->expr, 0);
+	gen_expr(ctxSet(context,C_PLAIN), mk_no_type(), cp->expr, 0);
 
-	/* variable (base) type */
+	/* base value type */
 	gen_code("\", %s, ", prim_type_tag_name[prim_tag]);
 
 	/* element count for arrays */
