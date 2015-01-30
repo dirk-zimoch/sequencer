@@ -573,13 +573,37 @@ static void gen_expr(
 #endif
 
 	inferred = type_of(ep);
-	if (expected->tag != T_PV && expected->tag != T_VOID && inferred->tag == T_PV)
+	if (expected->tag != T_PV && inferred->tag == T_PV
+		&& !ctxTest(context,C_PLAIN)
+		&& expected->tag != T_VOID)
 	{
+		/* We expect a non-pv expression, but inferred a pv type, so
+		the expression should decay to a value type. Which means, in
+		general, that we have to wrap the expression with a call to
+		the seq_pvValue macro. See below for cases in which we can
+		avoid this wrapping and access the object directly.
+
+		There are a two exceptional cases we have to exclude:
+
+		If C_PLAIN is in the context, we are interested in the
+		expression exactly as in the SNL source (this typically
+		means we generate a string literal).
+
+		If we expect T_VOID, this is either because we are
+		generating a statement (in which case the conversion to a
+		value type is unnecessary), or because we have a special
+		reason why we want to access the value directly (see e.g.
+		gen_channel_init). */
+
 #ifdef DEBUG
 		report("maybe insert seq_pvValue\n");
 #endif
-		/* optimisation: access C variable directly */
-		/* note: this also allows certain initialisers to be static */
+		/* Optimisation: access C variable directly.
+		This also makes the generated code more readable
+		and allows certain initialisers to be static.
+
+		TODO: Generalize this to all kinds of var expressions.
+		*/
 		if (ep->tag == E_VAR && (
 			ep->extra.e_var->scope->tag == D_PROG ||
 			ep->extra.e_var->scope->tag == D_SS
