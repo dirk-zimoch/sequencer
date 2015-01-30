@@ -854,7 +854,7 @@ static void gen_channel_init(uint context, Chan *cp)
 		gen_code(
 "#error expression '"
 		);
-		gen_expr(context, mk_no_type(), cp->expr, 0);
+		gen_expr(ctxSet(context,C_PLAIN), mk_no_type(), cp->expr, 0);
 		gen_code("'"
 " cannot be assigned to a PV (on the chosen target system)\\\n"
 " because Channel Access does not support integral types longer than 4 bytes.\\\n"
