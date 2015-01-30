@@ -580,8 +580,7 @@ static void gen_expr(
 		/* note: this also allows certain initialisers to be static */
 		if (ep->tag == E_VAR && (
 			ep->extra.e_var->scope->tag == D_PROG ||
-			ep->extra.e_var->scope->tag == D_SS ||
-			ep->extra.e_var->scope->tag == D_STATE
+			ep->extra.e_var->scope->tag == D_SS
 			)
 		)
 		{
