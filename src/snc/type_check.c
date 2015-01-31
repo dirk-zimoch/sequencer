@@ -4,14 +4,24 @@ Copyright (c) 2013-2015 Helmholtz-Zentrum Berlin f. Materialien
 This file is distributed subject to a Software License Agreement found
 in the file LICENSE that is included with this distribution.
 \*************************************************************************/
-/* Extremely rudimentary type checker. The function type_of takes an
-   expression and returns an approximation of its type. Used for code
-   generation when we want to find out
+/* Extremely rudimentary type checker.
+
+   The function type_of takes an expression and returns an approximation of
+   its type. Used for code generation when we want to find out
+
     (a) whether a given expression has function type (so we can add
         implicit parameters)
+
     (b) for which parts of an expression we have to substitute the
         channel id instead of the value of variable
-   Error reporting is done only in a few cases
+
+   It does almost no actual type checking, delegating this to the C compiler.
+   The returned type may differ from the real type because we appoximate e.g.
+   the result of binary operators to 'int'.
+
+   In contrast, the function pv_type_check really does type checking.
+   This is needed because channels are translated to the monomorphic type CH_ID,
+   so the C side cannot do any type checking for channels.
 */
 
 #include <assert.h>
@@ -59,33 +69,10 @@ Type *type_of(Node *e)
 
     switch (e->tag) {
     case E_ASSOP:                       /* assignment operator [left,right] */
-        l = type_of(e->assop_left);
-        r = type_of(e->assop_right);
-        switch (e->token.symbol) {
-        case TOK_ADDEQ:
-        case TOK_SUBEQ:
-            if (type_is_pointer(l) && !type_is_pointer(r)) {
-                return e->type = l;
-            }
-            if (!type_is_pointer(l) && type_is_pointer(r)) {
-                return r;
-            }
-            if (type_is_pointer(l) && type_is_pointer(r)) {
-                return error_at_node(e, "invalid operands of %s", e->token.str), no_type;
-            }
-            /* fall through */
-        default:
-            if (l->tag == T_FOREIGN || r->tag == T_FOREIGN)
-                return e->type = no_type;
-            if (l->tag == T_NONE || r->tag == T_NONE)
-                return e->type = no_type;
-            return e->type = strip_pv_type(l);
-            break;
-        }
-        break;
+        return e->type = strip_pv_type(type_of(e->assop_left));
     case E_BINOP:                       /* binary operator [left,right] */
-        l = type_of(e->binop_left);
-        r = type_of(e->binop_right);
+        l = strip_pv_type(type_of(e->binop_left));
+        r = strip_pv_type(type_of(e->binop_right));
         switch (e->token.symbol) {
         case TOK_SUB:
         case TOK_ADD:
@@ -116,13 +103,16 @@ Type *type_of(Node *e)
         case TOK_CARET:
         case TOK_AMPERSAND:
         case TOK_MOD:
-            if (l->tag == T_FOREIGN || r->tag == T_FOREIGN)
-                return e->type = no_type;
-            if (l->tag == T_NONE || r->tag == T_NONE)
+            if (type_is_dynamic(l) || type_is_dynamic(r))
                 return e->type = no_type;
             return e->type = num_type;
         case TOK_COMMA:
-            return e->type = strip_pv_type(r);
+            return e->type = r;
+        default:
+            error_at_node(e, "unexpected binary operator %s\n", e->token.str);
+            dump_node(e, 0);
+            assert(impossible);
+            return e->type = no_type;
         }
     case E_CAST:                        /* type cast [type,operand] */
         assert(e->cast_type);
@@ -170,8 +160,10 @@ Type *type_of(Node *e)
         case TOK_SIZEOF:
             return e->type = num_type;
         default:
+            error_at_node(e, "unexpected prefix operator %s\n", e->token.str);
             dump_node(e, 0);
             assert(impossible);
+            return e->type = no_type;
         }
     case E_SELECT:                      /* member selection [left,right] */
         t = type_of(e->select_left);
@@ -188,6 +180,7 @@ Type *type_of(Node *e)
             else
                 return e->type = no_type;
         default:
+            error_at_node(e, "unexpected member selection operator %s\n", e->token.str);
             dump_node(e, 0);
             assert(impossible);
             return e->type = no_type;
@@ -201,18 +194,18 @@ Type *type_of(Node *e)
         if (t) {
             return e->type = t;
         } else {
-            error_at_node(e->subscr_operand, "subscript operand has wrong type\n");
             return e->type = no_type;
         }
     case E_TERNOP:                      /* ternary operator [cond,then,else] */
         return e->type = type_of(e->ternop_then);
     case E_VAR:                         /* variable [] */
         if (!e->extra.e_var)
-            return e->type = mk_no_type();
+            return e->type = no_type;
         else
             return e->type = e->extra.e_var->type;
     default:
-        error_at_node(e, "unexpected expression type %s\n", node_name(e));
+        error_at_node(e, "unexpected node tag %s\n", node_name(e));
+        dump_node(e, 0);
         assert(impossible);
         return e->type = no_type;
     }
