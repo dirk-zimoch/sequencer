@@ -12,7 +12,7 @@ in the file LICENSE that is included with this distribution.
 
 enum type_tag {
     T_NONE,     /* undeclared (or declared as foreign) variable */
-    T_EVFLAG,   /* event flags */
+    T_EVFLAG,   /* event flag */
     T_VOID,     /* void type */
     T_PRIM,     /* primitive types: numbers, char, string */
     T_FOREIGN,  /* foreign types (declared in C code) */
@@ -90,6 +90,14 @@ Type *type_contains_pv(Type *t);
     ((t)->tag == T_PRIM && (t)->val.prim == P_STRING) ? mk_prim_type(P_CHAR) : 0)
 
 #define strip_pv_type(t) ((t)->tag == T_PV ? (t)->val.pv.value_type : (t))
+
+/*
+ * The type T_NONE roughly corresponds to the "dynamic type" in the
+ * gradual typing literature: it is compatible with everything.
+ * However, a foreign typedef has the same status (it could be anything).
+ */
+#define type_is_dynamic(t) ((t)->tag == T_NONE || \
+    ((t)->tag == T_FOREIGN && (t)->val.foreign.tag == F_TYPENAME))
 
 /* generate type, name is an optional variable name */
 void gen_type(Type *t, const char *prefix, const char *name);
