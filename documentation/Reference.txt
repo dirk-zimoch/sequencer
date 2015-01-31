@@ -324,17 +324,9 @@ constructor in the first place.
 
 The SNL compiler now contains a rudimentary type checker. However, type
 checking is done only where necessary to decide whether to pass a simple
-value or a channel object.
-
-Note, that a channel object still looses its special channel status when
-passed to a context that does not expect a channel but an ordinary value.
-This is the case for all foreign function calls as well as the arithmetic,
-logical, and bit-wise operators, and also the assignment operator. It is
-*not* the case, however, for the 'address-of' operator ("&").
-
-You can think of this as an implicit type cast to the underlying value type;
-in fact, the semantics of pv types are very similar to the (default)
-semantics of *references* in C++.
+value or a channel object, as well as to distinguish the value types of
+channels (because in the generated C code channels are all mapped to a
+single monomorphic type).
 
 .. versionadded:: 2.3
 
@@ -757,6 +749,29 @@ Particularly, channels are *not* allocated for
 * function arguments and return values,
 
 * variables of pointer type.
+
+Semantics
+~~~~~~~~~
+
+A channel object behaves as if it were cast to its underlying value type
+whenever the context does not expect a channel (i.e. a pv type). This is the
+case for all foreign functions and for all operators, (arithmetic, logical,
+and bit-wise, and also the assignment operator), with the exception of the
+'address-of' operator ("&"). Otherwise, only SNL functions where the
+parameter is declared to be of pv type will get the channel object passed,
+and the underlying value is thus (indirectly) passed *by reference*.
+
+This makes the semantics of variables of pv type fully backwards compatible:
+you use them in expressions and statements in the same way as in earlier
+versions.
+
+If you happen to be familiar with C++, it may help to think of pv types as
+behaving similar to reference types: in C++, a variable of reference type
+also acts like the underlying value type when used in a context that does
+not expect a reference. And a function that takes a pv type as argument *may
+modify the value*, just as a function in C++ that that takes a reference as
+parameter.
+
 
 Initializers
 ^^^^^^^^^^^^
