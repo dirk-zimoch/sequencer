@@ -239,7 +239,7 @@ static void gen_entex_body(uint context, Node *xp)
 {
 	assert(xp->tag == D_ENTEX);			/* precondition */
 	assert(xp->entex_block->tag == S_CMPND);	/* invariant */
-	gen_block(context, mk_no_type(), xp->entex_block, 0);
+	gen_block(context, mk_void_type(), xp->entex_block, 0);
 }
 
 static void gen_action_body(uint context, Node *xp)
@@ -260,7 +260,7 @@ static void gen_action_body(uint context, Node *xp)
 		assert(tp->tag == D_WHEN);		/* precondition */
 		/* one case for each transition */
 		indent(level); gen_code("case %d:\n", trans_num);
-		gen_block(ctxSet(context,C_TRANS), mk_no_type(), tp->when_block, level+1);
+		gen_block(ctxSet(context,C_TRANS), mk_void_type(), tp->when_block, level+1);
 		/* end of case */
 		indent(level+1); gen_code("return;\n");
 		trans_num++;
