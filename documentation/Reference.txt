@@ -22,7 +22,7 @@ almost identical to that of C. There are only two exceptions:
 
 * more reserved words.
 
-We use an informal notation with explanatory text in agle brackets standing
+We use an informal notation with explanatory text in angle brackets standing
 in for the formal definition.
 
 Comments
@@ -46,7 +46,7 @@ Identifiers
    identifier: <same as in C>
 
 Identifiers follow the same rules as in C. They are used for variables
-(including foreign variables and `event flag`\s), the program name,
+(including foreign variables), functions, type names, the program name,
 states, state sets, and options.
 
 Literals
@@ -86,7 +86,9 @@ See `Escape to C Code` for examples and rationale.
 Embedded C code fragments are the cause for one of the two conflicts in the
 grammar. The reason is that the parser cannot always decide whether such a
 fragment is a declaration or a statement. (The other conflict is due to the
-infamous "dangling else".)
+infamous `dangling else`_.)
+
+.. _dangling else: http://en.wikipedia.org/wiki/Dangling_else
 
 Line Markers
 ^^^^^^^^^^^^
@@ -118,20 +120,22 @@ Program Structure
 .. productionlist::
    program: "program" `identifier` `program_param` `initial_defns` `entry` `state_sets` `exit` `final_defns`
 
-This is the overall structure of an SNL program. After the keyword
-"program" comes the name of the program, followed by an optional program
-parameter, initial global definitions, an optional entry block, the state sets, an
+This is the overall structure of an SNL program. After the keyword "program"
+comes the name of the program, followed by optional program parameters,
+initial global definitions, an optional entry block, the state sets, an
 optional exit block, and then again global definitions.
 
 Program Name and Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The program name is an identifier. It is used as the name of the global
-variable which contains or points to all the program data structures
-(the address of this global variable is passed to the ``seq`` function when
-creating the run-time sequencer). It is also used as the base for the state
-set thread names unless overridden via the *name* parameter (see `run
-time parameters`).
+variable which contains all the program data structures (the address of this
+global variable is passed to the ``seq`` function to start a program). If
+you link different programs together into a single binary, the programs must
+have different program names.
+
+It is also used as the base for the state set thread names unless overridden
+via the *name* parameter (see `run time parameters`).
 
 .. productionlist::
    program_param: "(" `string` ")"
@@ -191,22 +195,22 @@ run in the context of the first state set thread.
 `state entry and exit blocks`, which have the same syntax but are
 executed at each `transition` from/to a new state.)
 
-The entry or exit code is a regular SNL code block and thus can contain local
-variable declarations. Top-level entry code is always executed after initiating
-connections to (named) `PV`\s, and exit code is executed before connections are
-shut down. Furthermore, if the global `+c` option is in effect, the
-entry code is executed only after all channels are connected and monitored
-channels have received their first monitor event. All built-in PV functions
-can be expected to work in global entry and exit blocks.
+The entry or exit code is a regular SNL code block and thus can contain
+local variable declarations. Top-level entry code is always executed after
+initiating connections to (named) `PV`\s, and exit code is executed before
+connections are shut down. Furthermore, if the global `+c` option is in
+effect, the entry code is executed only after all channels are actually
+connected and monitored channels have received their first monitor event.
+All built-in PV functions can be expected to work in global entry and exit
+blocks.
 
 Note that global entry and exit blocks operate as if executed as part of the
-first state set. This means that in `safe mode` changes to global
-variables made from inside the entry block are not visible to state sets
-other than the first unless explicitly communicated (e.g. by calling pvPut).
-The fact that the first state set plays a special role is a historical
-accident, rather than conscious design. I might be tempted to redesign this
-aspect in a future version, for instance by giving entry and exit blocks
-their own dedicated virtual state set.
+first state set. This means that in `safe mode` changes to global variables
+made from inside the entry block are not visible to state sets other than
+the first unless explicitly communicated (e.g. by calling pvPut). The fact
+that the first state set plays a special role is a historical accident,
+rather than conscious design. A more symmetric semantics of antry and exit
+blocks would be preferable and might be implemented in the future.
 
 .. productionlist::
    block: "{" `block_defns` `statements` "}"
@@ -227,7 +231,7 @@ compound `Statements`_, in `Transitions`_, and in `Function Definitions`_.
 State Sets
 ^^^^^^^^^^
 
-These are described in detail in `State Set Definition`_.
+These are described in detail in the section `State Set Definitions`_.
 
 
 Final Definitions
@@ -301,8 +305,8 @@ Function Definitions
 
 Function definitions are mostly like those in C.
 
-One difference is that functions declared in SNL get passed certain implicit
-parameters. This makes it possible to call built-in functions as if the code
+One difference is that functions declared in SNL get passed an extra implicit
+parameter. This makes it possible to call built-in functions as if the code
 were a normal action block.
 
 Another difference from C is that SNL functions automatically scope over the
@@ -1187,8 +1191,8 @@ example would look like this::
    assign g[1].value to "{DEV}:set";
 
 
-State Set Definition
---------------------
+State Set Definitions
+---------------------
 
 .. productionlist::
    state_sets: `state_sets` `state_set`
@@ -2502,7 +2506,7 @@ pvAssignCount
 Returns the total number of channels in this program that are assigned to
 named process variables.
 
-If all channels are assigned to named `PV`s then the following expression is
+If all channels are assigned to named `PV`\s then the following expression is
 `true`::
 
    pvAssignCount() == pvChannelCount()
