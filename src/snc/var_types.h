@@ -19,9 +19,6 @@ enum type_tag {
     T_POINTER,
     T_ARRAY,
     T_FUNCTION,
-#if 0
-    T_CONST,
-#endif
     T_STRUCT,   /* struct defined in SNL code */
     T_PV,
 };
@@ -54,11 +51,6 @@ struct type {
             Type *return_type;
             Node *param_decls;
         } function;
-#if 0
-        struct {
-            Type *value_type;
-        } constant;
-#endif
         struct {
             const char *name;
             unsigned num_members;   /* only SNL members, not escaped code */
@@ -152,9 +144,6 @@ const char *type_tag_names[]
     "T_POINTER",
     "T_ARRAY",
     "T_FUNCTION",
-#if 0
-    "T_CONST",
-#endif
     "T_STRUCT",
     "T_PV",
 }
