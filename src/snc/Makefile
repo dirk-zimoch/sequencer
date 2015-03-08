@@ -75,7 +75,6 @@ clean::
 endif
 endif
 
-# this ifdef needed for 3.14.8 compatibility
 ifdef T_A
 -include lexer$(DEP) snl$(DEP)
 endif
