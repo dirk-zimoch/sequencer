@@ -60,7 +60,7 @@ CH_ID seq_pvCreate(
     unsigned        queueSize,      /* queue size (0=not queued) */
     unsigned        queueIndex)     /* queue index */
 {
-    uint nss;
+    unsigned nss;
     CH_ID ch = sp->chan + chNum;
 
     assert(chNum < sp->numChans);
