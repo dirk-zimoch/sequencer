@@ -34,21 +34,34 @@ static PVTYPE pv_type_map[] =
     { P_STRING,     pvTypeSTRING,   pvTypeTIME_STRING,  sizeof(string)          },
 };
 
-epicsShareFunc CH_ID seq_pvCreate(
+static void seq_pvAddMonitor(
     PROG        *sp,            /* program instance */
-    unsigned    chNum,          /* index of channel */
-    const char  *chName,        /* assigned channel name */
-    size_t      offset,         /* offset to value */
-    const char  *varName,       /* variable name, including subscripts*/
-    PTYPE       varType,        /* variable (base) type */
-    unsigned    count,          /* element count for arrays */
-    evflag      ef,             /* event flag if synced */
-    unsigned    queueSize,      /* queue size (0=not queued) */
-    unsigned    queueIndex)     /* queue index */
+    CH_ID       ch,             /* channel object */
+    unsigned    ssNum)          /* state set number */
 {
-    CH_ID ch = sp->chan + chNum;
+    assert(ssNum < sp->numSS);
+    sp->ss[ssNum].monitored[ch - sp->chan] = TRUE;
+    if (ch->dbch && !ch->dbch->monitored) {
+        ch->dbch->monitored = TRUE;
+        sp->monitorCount++;
+    }
+}
 
-    DEBUG("pvCreate: ef=%p\n", ef);
+CH_ID seq_pvCreate(
+    PROG            *sp,            /* program instance */
+    unsigned        chNum,          /* index of channel */
+    const char      *chName,        /* assigned channel name */
+    size_t          offset,         /* offset to value */
+    const char      *varName,       /* variable name, including subscripts*/
+    PTYPE           varType,        /* variable (base) type */
+    unsigned        count,          /* element count for arrays */
+    const seqMask   *monMask,       /* set of state sets with a monitor */
+    unsigned        efNum,          /* event flag number if synced */
+    unsigned        queueSize,      /* queue size (0=not queued) */
+    unsigned        queueIndex)     /* queue index */
+{
+    uint nss;
+    CH_ID ch = sp->chan + chNum;
 
     assert(chNum < sp->numChans);
     ch->prog = sp;
@@ -57,9 +70,13 @@ epicsShareFunc CH_ID seq_pvCreate(
     ch->count = count;
     if (ch->count == 0)
         ch->count = 1;
-    ch->syncedTo = ef;
+
+    if (efNum)
+        ch->syncedTo = sp->eventFlags + efNum;
+    else
+        ch->syncedTo = 0;
     if (ch->syncedTo) {
-        bitSet(ef->synced, chNum);
+        bitSet(ch->syncedTo->synced, chNum);
     }
     ch->eventNum = sp->numEvFlags + chNum + 1;
 
@@ -87,6 +104,10 @@ epicsShareFunc CH_ID seq_pvCreate(
             sp->assignCount++;
         }
     }
+
+    for (nss = 0; nss < sp->numSS; nss++)
+        if (bitTest(monMask,nss))
+            seq_pvAddMonitor(sp, ch, nss);
 
     if (queueSize) {
         /* We want to store the whole pv message in the queue,
@@ -117,23 +138,6 @@ epicsShareFunc CH_ID seq_pvCreate(
         return NULL;
     }
     return ch;
-}
-
-epicsShareFunc void seq_pvAddMonitor(
-    PROG        *sp,            /* program instance */
-    CH_ID       ch,             /* channel object */
-    unsigned    ssNum)          /* state set number */
-{
-    if (ssNum < sp->numSS) {
-        sp->ss[ssNum].monitored[ch - sp->chan] = TRUE;
-    } else {    /* monitor for all state sets */
-        for (ssNum=0; ssNum < sp->numSS; ssNum++)
-            sp->ss[ssNum].monitored[ch - sp->chan] = TRUE;
-    }
-    if (ch->dbch) {
-        ch->dbch->monitored = TRUE;
-        sp->monitorCount++;
-    }
 }
 
 epicsShareFunc size_t seq_pvOffset(CH_ID ch)

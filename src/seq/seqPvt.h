@@ -231,6 +231,23 @@ struct event_flag
 
 /* Internal procedures */
 
+/* seq_ef.c */
+evflag seq_efCreate(PROG_ID sp, unsigned ef_num, unsigned val);
+
+/* seq_chan.c */
+CH_ID seq_pvCreate(
+    PROG            *sp,            /* program instance */
+    unsigned        chNum,          /* index of channel */
+    const char      *chName,        /* assigned channel name */
+    size_t          offset,         /* offset to value */
+    const char      *varName,       /* variable name, including subscripts*/
+    PTYPE           varType,        /* variable (base) type */
+    unsigned        count,          /* element count for arrays */
+    const seqMask   *monMask,       /* set of state sets with a monitor */
+    unsigned        efNum,          /* event flag number if synced */
+    unsigned        queueSize,      /* queue size (0=not queued) */
+    unsigned        queueIndex);    /* queue index */
+
 /* seq_task.c */
 void sequencer(void *arg);
 void ss_write_buffer(CHAN *ch, void *val, PVMETA *meta, boolean dirtify);

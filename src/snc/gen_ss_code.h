@@ -18,5 +18,7 @@ in the file LICENSE that is included with this distribution.
 uint default_context(Options *options);
 void gen_ss_code(uint context, Node *prog, ChanList *channels, EvFlagList *event_flags);
 void gen_funcdef(uint context, Node *fp);
+void gen_channel_entry(uint context, Chan *cp);
+void gen_ef_entry(uint context, EvFlag *ef);
 
 #endif	/*INCLgensscodeh*/

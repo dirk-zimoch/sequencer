@@ -4,7 +4,7 @@
 /*
  * Create an event flag.
  */
-epicsShareFunc evflag seq_efCreate(PROG_ID sp, unsigned ef_num, unsigned val)
+evflag seq_efCreate(PROG_ID sp, unsigned ef_num, unsigned val)
 {
     evflag r = sp->eventFlags + ef_num;
 

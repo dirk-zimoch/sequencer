@@ -25,6 +25,7 @@ in the file LICENSE that is included with this distribution.
 #include "analysis.h"
 #include "main.h"
 #include "sym_table.h"
+#include "gen_ss_code.h"
 #include "gen_code.h"
 #include "node.h"
 #include "var_types.h"
@@ -35,6 +36,9 @@ typedef struct event_mask_args {
 	uint	num_event_flags;
 } EventMaskArgs;
 
+static void gen_evflag_table(EvFlagList *ef_list, Options *options);
+static void gen_monitor_masks(ChanList *chan_list, uint num_ss);
+static void gen_channel_table(ChanList *chan_list, Options *options);
 static void gen_state_table(Node *ss_list, uint num_event_flags, uint num_channels);
 static void fill_state_struct(Node *sp, char *ss_name, uint ss_num);
 static void gen_prog_table(Node *prog);
@@ -53,9 +57,148 @@ void gen_tables(Node *prog)
 	p = prog->extra.e_prog;
 
 	gen_code("\n/************************ Tables ************************/\n");
+	gen_evflag_table(p->evflag_list, p->options);
+	gen_monitor_masks(p->chan_list, p->num_ss);
+	gen_channel_table(p->chan_list, p->options);
 	gen_state_table(prog->prog_statesets, p->evflag_list->num_elems, p->chan_list->num_elems);
 	gen_ss_table(prog->prog_statesets);
 	gen_prog_table(prog);
+}
+
+/* Generate event flag table */
+static void gen_evflag_table(EvFlagList *ef_list, Options *options)
+{
+	EvFlag *ef;
+
+	if (ef_list->first)
+	{
+		gen_code("\n/* Event flag table */\n");
+		gen_code("static seqEvFlag " NM_EVFLAGS "[] = {\n");
+		foreach (ef, ef_list->first)
+			gen_ef_entry(default_context(options), ef);
+		gen_code("};\n");
+	}
+	else
+	{
+		gen_code("\n/* No event flag definitions */\n");
+		gen_code("#define " NM_EVFLAGS " 0\n");
+	}
+}
+
+typedef struct monitor_mask {
+	seqMask	*mask;
+	struct monitor_mask *next;
+} MonitorMask;
+
+static uint seq_mask_eq(seqMask *lhs, seqMask *rhs, unsigned num_words)
+{
+	uint n;
+	for (n=0; n<num_words; n++)
+	{
+#ifdef DEBUG
+		printf("lhs[%d]=0x%08x,rhs[%d]=0x%08x\n",n,lhs[n],n,rhs[n]);
+#endif
+		if (lhs[n] != rhs[n])
+			return FALSE;
+	}
+	return TRUE;
+}
+
+static int find_mask(seqMask *needle, MonitorMask **phaystack, unsigned num_words)
+{
+	int i = 0;
+	int n;
+	MonitorMask *mm, *last=0;
+
+	if (phaystack)
+	{
+		foreach (mm, *phaystack)
+		{
+			if (seq_mask_eq(needle, mm->mask, num_words))
+			{
+				return i;
+			}
+			last = mm;
+			i++;
+		}
+	}
+	/* not found? then add it to the list */
+	mm = new(MonitorMask);
+	mm->mask = newArray(seqMask, num_words);
+	for (n = 0; n < num_words; n++)
+		mm->mask[n] = needle[n];
+	if (last)
+		last->next = mm;
+	else
+		*phaystack = mm;
+#ifdef DEBUG
+	printf("find_mask returned %d\n",i);
+#endif
+	return i;
+}
+
+static void gen_monitor_masks(ChanList *chan_list, uint num_ss)
+{
+	MonitorMask *first_mask = 0;
+	seqMask *mask;
+	Chan *chan;
+	uint num_words = NWORDS(num_ss);
+	int num_masks = -1;
+
+	gen_code("\n/* Monitor masks */\n");
+	mask = newArray(seqMask, num_words);
+	foreach (chan, chan_list->first)
+	{
+		Monitor *mp;
+		uint n;
+		foreach (mp, chan->monitor)
+		{
+			if (mp->scope->tag == D_PROG)
+			{
+				uint i;
+				for (i=0; i<num_ss; i++)
+					bitSet(mask, i);
+			}
+			else
+				bitSet(mask, mp->scope->extra.e_ss->index);
+		}
+		chan->mon_mask_index = find_mask(mask, &first_mask, num_words);
+		if (chan->mon_mask_index > num_masks)
+		{
+			num_masks = chan->mon_mask_index;
+			/* generate code for a new mask */
+			gen_code("static const seqMask " NM_MONMASK "_%d[] = {\n", num_masks);
+			for (n = 0; n < num_words; n++)
+				gen_code("\t0x%08x,\n", mask[n]);
+			gen_code("};\n");
+		}
+		/* reset mask */
+		for (n = 0; n < num_words; n++)
+			mask[n] = 0;
+	}
+}
+
+/* Generate channel table with data for each defined channel */
+static void gen_channel_table(ChanList *chan_list, Options *options)
+{
+	Chan *cp;
+
+	if (chan_list->first)
+	{
+		gen_code("\n/* Channel table */\n");
+		gen_code("static seqChan " NM_CHANS "[] = {\n");
+		gen_code("\t/* chOffset, chName, valOffset, expr, type, count, efNum, queueSize, queueIndex */\n");
+		foreach (cp, chan_list->first)
+		{
+			gen_channel_entry(default_context(options), cp);
+		}
+		gen_code("};\n");
+	}
+	else
+	{
+		gen_code("\n/* No channel definitions */\n");
+		gen_code("#define " NM_CHANS " 0\n");
+	}
 }
 
 /* Generate state event mask and table */
@@ -84,7 +227,7 @@ static void gen_state_table(Node *ss_list, uint num_event_flags, uint num_channe
 		foreach (sp, ssp->ss_states)
 		{
 			gen_state_event_mask(sp, num_event_flags, event_mask, num_event_words);
-			gen_code("static const seqMask " NM_MASK "_%s_%d_%s[] = {\n",
+			gen_code("static const seqMask " NM_EVMASK "_%s_%d_%s[] = {\n",
 				ssp->token.str, ss_num, sp->token.str);
 			for (n = 0; n < num_event_words; n++)
 				gen_code("\t0x%08x,\n", event_mask[n]);
@@ -120,7 +263,7 @@ static void fill_state_struct(Node *sp, char *ss_name, uint ss_num)
 		gen_code(NM_EXIT "_%s_%d_%s,\n", ss_name, ss_num, sp->token.str);
 	else
 		gen_code("0,\n");
-	gen_code("\t/* event mask array */  " NM_MASK "_%s_%d_%s,\n", ss_name, ss_num, sp->token.str);
+	gen_code("\t/* event mask array */  " NM_EVMASK "_%s_%d_%s,\n", ss_name, ss_num, sp->token.str);
 	gen_code("\t/* state options */     ");
 	encode_state_options(sp->extra.e_state->options);
 	gen_code("\n\t},\n");
@@ -171,6 +314,7 @@ static void gen_prog_table(Node *prog)
 	gen_code("seqProgram %s = {\n", prog->token.str);
 	gen_code("\t/* magic number */      %d,\n", MAGIC);
 	gen_code("\t/* program name */      \"%s\",\n", prog->token.str);
+	gen_code("\t/* channels */          " NM_CHANS ",\n");
 	gen_code("\t/* num. channels */     %d,\n", p->chan_list->num_elems);
 	gen_code("\t/* state sets */        " NM_STATESETS ",\n");
 	gen_code("\t/* num. state sets */   %d,\n", p->num_ss);
@@ -180,6 +324,7 @@ static void gen_prog_table(Node *prog)
 		gen_code("\t/* user var size */     0,\n");
 	gen_code("\t/* param */             \"%s\",\n",
 		prog->prog_param ? prog->prog_param->token.str : "");
+	gen_code("\t/* event flags */       " NM_EVFLAGS ",\n");
 	gen_code("\t/* num. event flags */  %d,\n", p->evflag_list->num_elems);
 	gen_code("\t/* encoded options */   "); encode_options(p->options);
 	gen_code("\t/* init func */         " NM_INIT ",\n");

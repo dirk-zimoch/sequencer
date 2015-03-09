@@ -22,6 +22,7 @@ void indent(int level);
 /* names and name prefixes for generated structs */
 #define NM_VARS		"seqg_vars"
 #define NM_CHANS	"seqg_chans"
+#define NM_EVFLAGS	"seqg_evflags"
 #define NM_STATES	"seqg_states"
 #define NM_STATESETS	"seqg_statesets"
 
@@ -31,7 +32,8 @@ void indent(int level);
 #define NM_INIT		"seqg_init"
 #define NM_ACTION	"seqg_action"
 #define NM_EVENT	"seqg_event"
-#define NM_MASK		"seqg_mask"
+#define NM_EVMASK	"seqg_evmask"
+#define NM_MONMASK	"seqg_monmask"
 
 /* names of generated function arguments */
 #define NM_VAR		"seqg_var"

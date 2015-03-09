@@ -74,8 +74,32 @@ typedef seqBool SEQ_EVENT_FUNC(SS_ID ssId, int *transNum, int *nextState);
 typedef void SEQ_SS_FUNC(SS_ID ssId);
 typedef void SEQ_PROG_FUNC(PROG_ID progId);
 
+typedef const struct seqEvFlag seqEvFlag;
+typedef const struct seqChan seqChan;
 typedef const struct seqState seqState;
 typedef const struct seqSS seqSS;
+
+/* Static information about an event flag */
+struct seqEvFlag
+{
+	size_t		offset;		/* offset to evflag object */
+	unsigned	initVal;	/* 0=cleared, 1=set */
+};
+
+/* Static information about a channel */
+struct seqChan
+{
+	size_t		chOffset;	/* offset to channel object */
+	const char	*chName;	/* assigned channel name */
+	size_t		valOffset;	/* offset to value */
+	const char	*expr;		/* expression */
+	enum prim_type_tag type;	/* (base) type */
+	unsigned	count;		/* element count for arrays */
+	const seqMask	*monMask;	/* set of state sets with a monitor */
+	unsigned	efNum;		/* event flag number if synced */
+	unsigned	queueSize;	/* syncQ queue size (0=not queued) */
+	unsigned	queueIndex;	/* syncQ queue index */
+};
 
 /* Static information about a state */
 struct seqState
@@ -102,11 +126,13 @@ struct seqProgram
 {
 	unsigned	magic;		/* magic number */
 	const char	*progName;	/* program name (for debugging) */
+	seqChan		*chans;		/* array of channel info structs */
 	unsigned	numChans;	/* number of db channels */
 	seqSS		*ss;		/* array of state set info structs */
 	unsigned	numSS;		/* number of state sets */
 	unsigned	varSize;	/* # bytes in user variable area */
 	const char	*params;	/* program paramters */
+	seqEvFlag	*evFlags;	/* array of event flag info structs */
 	unsigned	numEvFlags;	/* number of event flags */
 	seqMask		options;	/* program option mask */
 	SEQ_PROG_FUNC	*initFunc;	/* init function */
@@ -115,25 +141,7 @@ struct seqProgram
 	unsigned	numQueues;	/* number of syncQ queues */
 };
 
-epicsShareFunc evflag seq_efCreate(PROG_ID sp, unsigned ef_num, unsigned val);
 epicsShareFunc void seq_exit(SS_ID);
-
-epicsShareFunc CH_ID seq_pvCreate(
-	struct program_instance	*sp,	/* program instance */
-	unsigned	chNum,		/* index of channel */
-	const char	*chName,	/* assigned channel name */
-	size_t		offset,		/* offset to value */
-	const char	*varName,	/* variable name, including subscripts*/
-	enum prim_type_tag varType,	/* variable (base) type */
-	unsigned	count,		/* element count for arrays */
-	evflag		ef,		/* event flag if synced */
-	unsigned	queueSize,	/* syncQ queue size (0=not queued) */
-	unsigned	queueIndex);	/* syncQ queue index */
-
-epicsShareFunc void seq_pvAddMonitor(
-	struct program_instance	*sp,	/* program instance */
-	CH_ID		ch,		/* channel object */
-	unsigned	ssNum);		/* state set number */
 
 epicsShareFunc size_t seq_pvOffset(CH_ID ch);
 

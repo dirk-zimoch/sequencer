@@ -126,7 +126,7 @@ epicsShareFunc epicsThreadId epicsShareAPI seq(
  */
 static boolean init_sprog(PROG *sp, seqProgram *seqProg)
 {
-	unsigned nss;
+	unsigned nss, nch, nef;
 
 	/* Copy information for state program */
 	sp->numSS = seqProg->numSS;
@@ -225,6 +225,27 @@ static boolean init_sprog(PROG *sp, seqProgram *seqProg)
 			errlogSevPrintf(errlogFatal, "init_sprog: calloc failed\n");
 			return FALSE;
 		}
+	}
+	for (nef = 0; nef < sp->numEvFlags; nef++)
+	{
+		seqEvFlag *pef = seqProg->evFlags + nef;
+		*(evflag*)((char*)sp->var + pef->offset) = seq_efCreate(sp, nef+1, pef->initVal);
+	}
+	for (nch = 0; nch < sp->numChans; nch++)
+	{
+		seqChan *pch = seqProg->chans + nch;
+		CH_ID ch = seq_pvCreate(sp,
+			nch,
+			pch->chName,
+			pch->valOffset,
+			pch->expr,
+			pch->type,
+			pch->count,
+			pch->monMask,
+			pch->efNum,
+			pch->queueSize,
+			pch->queueIndex);
+		*(CH_ID*)((char*)sp->var + pch->chOffset) = ch;
 	}
 	return TRUE;
 }

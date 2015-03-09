@@ -15,6 +15,7 @@ in the file LICENSE that is included with this distribution.
 #include <assert.h>
 #include <limits.h>
 
+#include "seq_snc.h"
 #include "node.h"
 #include "analysis.h"
 #include "gen_code.h"
@@ -819,24 +820,34 @@ static void gen_expr(
 	}
 }
 
-static void gen_ef_init(uint context, EvFlag *ef)
+void gen_ef_entry(uint context, EvFlag *ef)
 {
 	gen_line_marker(ef->expr);
 	indent(1);
-	gen_expr(context, mk_ef_type(), ef->expr, 0);
-	gen_code(" = seq_efCreate("NM_ENV", %d, ", 1 + ef->index);
+	gen_code("{");
+
+	/* offset to event flag object */
+	if (ctxTest(context, C_REENT))
+		gen_code("offsetof(struct %s, ", NM_VARS);
+	else
+		gen_code("(size_t)&");
+	gen_expr(ctxClear(context, C_REENT), mk_ef_type(), ef->expr, 0);
+	if (ctxTest(context, C_REENT))
+		gen_code(")");
+	gen_code(", ");
+
+	/* initial value */
 	if (ef->init)
 		gen_expr(context, mk_bool_type(), ef->init, 0);
 	else
 		gen_code("FALSE");
-	gen_code(");\n");
+	gen_code("},\n");
 }
 
-static void gen_channel_init(uint context, Chan *cp)
+void gen_channel_entry(uint context, Chan *cp)
 {
 	Type *basetype, *value_type;
 	enum prim_type_tag prim_tag;
-	Monitor *mp;
 
 	assert(cp->type->tag == T_PV);
 
@@ -872,18 +883,23 @@ static void gen_channel_init(uint context, Chan *cp)
 	dump_type(type_of(cp->expr), 1);
 #endif
 
-	/* left hand side (the channel object) */
 	indent(1);
-	gen_expr(context, mk_pv_type(mk_void_type()), cp->expr, 0);
+	gen_code("{");
 
-	/* right hand side starts with the call */
-	gen_code(" = seq_pvCreate("NM_ENV", ");
-
-	/* index of channel; assigned channel name */
-	if (!cp->name)
-		gen_code("%d, 0, ", cp->index);
+	/* offset to channel object */
+	if (ctxTest(context, C_REENT))
+		gen_code("offsetof(struct %s, ", NM_VARS);
 	else
-		gen_code("%d, \"%s\", ", cp->index, cp->name);
+		gen_code("(size_t)&");
+	gen_expr(ctxClear(context, C_REENT), mk_pv_type(mk_void_type()), cp->expr, 0);
+	if (ctxTest(context, C_REENT))
+		gen_code(")");
+
+	/* assigned channel name */
+	if (!cp->name)
+		gen_code(", 0, ");
+	else
+		gen_code(", \"%s\", ", cp->name);
 
 	/* offset to value */
 	if (ctxTest(context, C_REENT))
@@ -909,11 +925,14 @@ static void gen_channel_init(uint context, Chan *cp)
 	else
 		gen_code("1, ");
 
-	/* event flag expression if synced, else NOEVFLAG */
+	/* monitor mask */
+	gen_code(NM_MONMASK "_%d, ", cp->mon_mask_index);
+
+	/* event flag number if synced, else 0 */
 	if (cp->sync)
-		gen_expr(context, mk_ef_type(), cp->sync->expr, 0);
+		gen_code("%d", cp->sync->index + 1);
 	else
-		gen_code("NOEVFLAG");
+		gen_code("0");
 
 	/* syncq size (0=not queued) and index */
 	if (!cp->syncq)
@@ -922,15 +941,7 @@ static void gen_channel_init(uint context, Chan *cp)
 		gen_code(", DEFAULT_QUEUE_SIZE, %d", cp->syncq->index);
 	else
 		gen_code(", %d, %d", cp->syncq->size, cp->syncq->index);
-	gen_code(");\n");
-
-	foreach (mp, cp->monitor)
-	{
-		indent(1);
-		gen_code("seq_pvAddMonitor("NM_ENV", ");
-		gen_expr(context, mk_pv_type(mk_void_type()), cp->expr, 0);
-		gen_code(", %d);\n", (mp->scope->tag == D_PROG) ? UINT_MAX : mp->scope->extra.e_ss->index);
-	}
+	gen_code("},\n");
 }
 
 static void gen_init(uint context, Type *expected, Node *tgt, Node *ixp, int level)
@@ -1091,18 +1102,9 @@ static void gen_prog_entex_func(
 
 static void gen_prog_init_body(uint context, Node *prog, ChanList *channels, EvFlagList *event_flags)
 {
-	Chan	*cp;
-	EvFlag	*ef;
 	int	level = 1;
 
 	assert(prog->tag == D_PROG);
-	indent(level); gen_code("/* Create event flags */\n");
-	foreach(ef, event_flags->first)
-		gen_ef_init(context, ef);
-	indent(level); gen_code("/* Create channels */\n");
-	foreach (cp, channels->first)
-		gen_channel_init(context, cp);
-	indent(level); gen_code("/* Initialize variables */\n");
 	gen_user_var_init(context, prog, level);
 }
 
