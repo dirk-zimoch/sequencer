@@ -275,12 +275,22 @@ static void proc_db_events(
 			);
 		}
 	}
-	else
+	else if (value != NULL)
 	{
-		/* Copy value and meta data into user variable shared buffer
-		   (can get NULL value pointer for put completion only) */
-		assert((value==NULL)==(evtype == pvEventPut));
-		if (value != NULL)
+		/* Copy value and meta data into user variable shared buffer */
+		void *val = pv_value_ptr(value,type);
+		PVMETA meta;
+
+		/* put completion always has NULL value pointer */
+		assert(evtype != pvEventPut);
+		/* must not use an initializer here, the MS C compiler chokes on it */
+		meta.timeStamp = pv_stamp(value,type);
+		meta.status = pv_status(value,type);
+		meta.severity = pv_severity(value,type);
+		meta.message = NULL;
+
+		/* Set error message only when severity indicates error */
+		if (meta.severity != pvSevrNONE)
 		{
 			void *val = pv_value_ptr(value,type);
 			PVMETA meta;
@@ -300,10 +310,13 @@ static void proc_db_events(
 			}
 
 			/* Write value and meta data to shared buffers.
-			   Set the dirty flag only if this was a monitor event
-			   AND state set has the monitored flag set for this channel. */
+			   Set the dirty flag only if this was a monitor event. */
 			ss_write_buffer(ch, val, &meta, evtype == pvEventMonitor);
 		}
+
+		/* Write value and meta data to shared buffers.
+		   Set the dirty flag only if this was a monitor event. */
+		ss_write_buffer(ch, val, &meta, evtype == pvEventMonitor);
 	}
 
 	epicsMutexMustLock(sp->lock);
