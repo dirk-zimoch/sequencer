@@ -15,7 +15,7 @@ in the file LICENSE that is included with this distribution.
 #include <assert.h>
 #include <limits.h>
 
-#include "seq_snc.h"
+#include "var_types.h"
 #include "node.h"
 #include "analysis.h"
 #include "gen_code.h"
