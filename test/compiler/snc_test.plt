@@ -7,8 +7,8 @@ use Test::More;
 my $tests = {
   assign_to_void_pv       => { warnings => 0, errors => 1  },
   cast                    => { warnings => 0, errors => 0  },
-  delay_in_action         => { warnings => 0, errors => 0  },
-  efGlobal                => { warnings => 0, errors => 1  },
+  delay_in_action         => { warnings => 0, errors => 1  },
+  efGlobal                => { warnings => 0, errors => 3  },
   exOpt_UnrecOpt          => { warnings => 1, errors => 0  },
   foreignGlobal           => { warnings => 1, errors => 3  },
   foreignNoInit           => { warnings => 0, errors => 1  },
