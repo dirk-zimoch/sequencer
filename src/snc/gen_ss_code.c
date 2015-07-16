@@ -594,7 +594,7 @@ static void gen_expr(
 		generating a statement (in which case the conversion to a
 		value type is unnecessary), or because we have a special
 		reason why we want to access the value directly (see e.g.
-		gen_channel_init). */
+		gen_channel_entry). */
 
 #ifdef DEBUG
 		report("maybe insert seq_pvValue\n");
@@ -877,9 +877,9 @@ void gen_channel_entry(uint context, Chan *cp)
 	}
 
 #ifdef DEBUG
-	report("gen_channel_init: cp->expr=\n");
+	report("gen_channel_entry: cp->expr=\n");
 	dump_node(cp->expr,1);
-	report("gen_channel_init: type_of(cp->expr)=\n");
+	report("gen_channel_entry: type_of(cp->expr)=\n");
 	dump_type(type_of(cp->expr), 1);
 #endif
 
