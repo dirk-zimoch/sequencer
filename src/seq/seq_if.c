@@ -485,7 +485,7 @@ epicsShareFunc pvStat seq_pvPutTmo(SS_ID ss, CH_ID ch, enum compType compType, d
 	if (status != pvStatOK)
 		return status;
 
-	assert(ss->putReq[nch] == NULL);
+	assert(ss->putReq[chId] == NULL);
 
 	/* Determine number of elements to put (don't try to put more
 	   than db count) */
@@ -534,13 +534,21 @@ epicsShareFunc pvStat seq_pvPutTmo(SS_ID ss, CH_ID ch, enum compType compType, d
 			check_connected(dbch, meta);
 			return status;
 		}
+
+		if (compType == SYNC)			/* wait for completion */
+		{
+			pvSysFlush(sp->pvSys);
+			status = wait_complete(pvEventPut, ss, ss->putReq + chId, dbch, meta, tmo);
+			if (status != pvStatOK)
+				return status;
+		}
 	}
 
 	/* Synchronous: wait for completion */
 	if (compType == SYNC)
 	{
 		pvSysFlush(sp->pvSys);
-		status = wait_complete(pvEventPut, ss, ss->putReq + nch, dbch, meta, tmo);
+		status = wait_complete(pvEventPut, ss, ss->putReq + chId, dbch, meta, tmo);
 		if (status != pvStatOK)
 			return status;
 	}
