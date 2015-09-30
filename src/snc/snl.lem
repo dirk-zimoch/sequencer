@@ -16,6 +16,8 @@ in the file LICENSE that is included with this distribution.
 #include "var_types.h"
 #include "main.h"
 #include "parser.h"
+
+#define NIL (Node *)0
 }
 
 %extra_argument { Node **presult }
@@ -137,11 +139,11 @@ assign(r) ::= ASSIGN(k) var_expr(x) to pv_name_expr(y) SEMICOLON. {
 	r = node(D_ASSIGN, k, x, y);
 }
 assign(r) ::= ASSIGN(k) var_expr(x) SEMICOLON. {
-	r = node(D_ASSIGN, k, x, 0);
+	r = node(D_ASSIGN, k, x, NIL);
 }
 
 pv_name_expr(r) ::= string(x).				{ r = x; }
-pv_name_expr(r) ::= LBRACE(t) RBRACE.			{ r = node(E_INIT, t, 0); }
+pv_name_expr(r) ::= LBRACE(t) RBRACE.			{ r = node(E_INIT, t, NIL); }
 pv_name_expr(r) ::= LBRACE(t) pv_name_exprs(x) RBRACE.	{ r = node(E_INIT, t, x); }
 
 pv_name_exprs(r) ::= pv_name_expr(x).				{ r = x; }
@@ -166,7 +168,7 @@ syncq(r) ::= SYNCQ(k) var_expr(x) to event_flag(f) syncq_size(n) SEMICOLON. {
 	r = node(D_SYNCQ, k, x, f, n);
 }
 syncq(r) ::= SYNCQ(k) var_expr(x) syncq_size(n) SEMICOLON. {
-	r = node(D_SYNCQ, k, x, 0, n);
+	r = node(D_SYNCQ, k, x, NIL, n);
 }
 
 to ::= TO.
@@ -262,7 +264,7 @@ init_expr(r) ::= PV(t) pv_init_expr(x).			{ r = node(E_PRE, t, x); }
 
 pv_init_expr(r) ::= string(x).						{ r = x; }
 pv_init_expr(r) ::= LPAREN(t) pv_name_expr(x) pv_init_args(as) RPAREN.	{ r = node(E_PVINIT, t, x, as); }
-pv_init_expr(r) ::= LBRACE(t) RBRACE.					{ r = node(E_INIT, t, 0); }
+pv_init_expr(r) ::= LBRACE(t) RBRACE.					{ r = node(E_INIT, t, NIL); }
 pv_init_expr(r) ::= LBRACE(t) pv_init_exprs(x) RBRACE.			{ r = node(E_INIT, t, x); }
 
 pv_init_exprs(r) ::= pv_init_expr(x).				{ r = x; }
@@ -271,7 +273,7 @@ pv_init_exprs(r) ::= pv_init_exprs(xs) COMMA pv_init_expr(x).	{ r = link_node(xs
 pv_init_args(r) ::= .						{ r = 0; }
 pv_init_args(r) ::= pv_init_args(xs) COMMA pv_init_arg(x).	{ r = link_node(xs, x); }
 
-pv_init_arg(r) ::= MONITOR(k).				{ r = node(E_PVARG, k, 0); }
+pv_init_arg(r) ::= MONITOR(k).				{ r = node(E_PVARG, k, NIL); }
 pv_init_arg(r) ::= SYNC(k) event_flag(x).		{ r = node(E_PVARG, k, x); }
 pv_init_arg(r) ::= SYNCQ(k) syncq_size(n).		{ r = node(E_PVARG, k, n); }
 
@@ -316,20 +318,20 @@ type_expr(r) ::= basetype(t) abs_decl(d).	{ r = mk_decl(d, t); }
 
 // abstract_declarator
 abs_decl(r) ::= LPAREN abs_decl(x) RPAREN.	{ r = x; }
-abs_decl(r) ::= ASTERISK(t). [PRE]		{ r = node(E_PRE, t, 0); }
+abs_decl(r) ::= ASTERISK(t). [PRE]		{ r = node(E_PRE, t, NIL); }
 abs_decl(r) ::= ASTERISK(t) abs_decl(d). [PRE]	{ r = node(E_PRE, t, d); }
-abs_decl(r) ::= CONST(t). [PRE]			{ r = node(E_PRE, t, 0); }
+abs_decl(r) ::= CONST(t). [PRE]			{ r = node(E_PRE, t, NIL); }
 abs_decl(r) ::= CONST(t) abs_decl(d). [PRE]	{ r = node(E_PRE, t, d); }
-abs_decl(r) ::= PV(t). [PRE]			{ r = node(E_PRE, t, 0); }
+abs_decl(r) ::= PV(t). [PRE]			{ r = node(E_PRE, t, NIL); }
 abs_decl(r) ::= PV(t) abs_decl(d). [PRE]	{ r = node(E_PRE, t, d); }
 abs_decl(r) ::= subscript(s). [POST]		{ r = s; }
 abs_decl(r) ::= abs_decl(d) subscript(s). [POST]{ r = s; r->subscr_operand = d; }
 abs_decl(r) ::= LPAREN(t) param_decls(ps) RPAREN. [POST]
-						{ r = node(E_FUNC, t, 0, ps); }
+						{ r = node(E_FUNC, t, NIL, ps); }
 abs_decl(r) ::= abs_decl(d) LPAREN(t) param_decls(ps) RPAREN. [POST]
 						{ r = node(E_FUNC, t, d, ps); }
 
-subscript(r) ::= LBRACKET(t) INTCON(n) RBRACKET.	{ r = node(E_SUBSCR, t, 0, node(E_CONST, n)); }
+subscript(r) ::= LBRACKET(t) INTCON(n) RBRACKET.	{ r = node(E_SUBSCR, t, NIL, node(E_CONST, n)); }
 
 // not supported: empty brackets, empty parameter list
 // abs_decl ::= LBRACKET RBRACKET.
@@ -435,14 +437,14 @@ statement(r) ::= STATE NAME(t) SEMICOLON.	{ r = node(S_CHANGE, t); }
 statement(r) ::= c_code(x).			{ r = x; }
 statement(r) ::= block(x).			{ r = x; }
 statement(r) ::= IF(t) LPAREN comma_expr(c) RPAREN statement(th).
-						{ r = node(S_IF, t, c, th, 0); }
+						{ r = node(S_IF, t, c, th, NIL); }
 statement(r) ::= IF(t) LPAREN comma_expr(c) RPAREN statement(th) ELSE statement(el).
 						{ r = node(S_IF, t, c, th, el); }
 statement(r) ::= WHILE(t) LPAREN comma_expr(c) RPAREN statement(x).
 						{ r = node(S_WHILE, t, c, x); }
 statement(r) ::= for_statement(x).		{ r = x; }
 statement(r) ::= opt_expr(x) SEMICOLON(t).	{ r = node(S_STMT, t, x); }
-// statement(r) ::= error SEMICOLON(t).		{ r = node(S_STMT, t, 0); report("malformed expression\n"); }
+// statement(r) ::= error SEMICOLON(t).		{ r = node(S_STMT, t, NIL); report("malformed expression\n"); }
 
 for_statement(r) ::=
 	FOR(for) LPAREN
