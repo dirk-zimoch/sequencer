@@ -1025,6 +1025,11 @@ static void gen_init(uint context, Type *expected, Node *tgt, Node *ixp, int lev
 static void gen_var_init(Var *vp, uint context, int level)
 {
 	assert(vp);
+
+	/* We need to do generate initializing code only if an initializer
+	is present, since the generated C variables are either static
+	(non-reentrant mode) or allocated with calloc (reentrant mode), and
+	thus always initialized to zero. */
 	if (vp->type->tag != T_EVFLAG && vp->decl && vp->decl->decl_init)
 	{
 		assert(vp->type->tag != T_NONE);	/* syntax */
