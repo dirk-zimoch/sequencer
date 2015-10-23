@@ -13,8 +13,12 @@ void timer_init(struct timer *timer, double delay_time) {
     timer->delay = timer->delta_delay = delay_time;
 }
 
-void timer_update(struct timer *timer) {
-    timer->delay += timer->delta_delay;
+int timer_delay(struct timer *timer) {
+    int result = delay(timer->delay);
+    if (result) {
+        timer->delay += timer->delta_delay;
+    }
+    return result;
 }
 
 void dump_time_diff(char *msg, struct epicsTimeStamp *relative_to) {
@@ -43,16 +47,13 @@ ss timer {
         option -t;
         when (delay(60.166)) {
         } state reset
-        when (delay(timer1.delay)) {
-            timer_update(&timer1);
+        when (timer_delay(&timer1)) {
             dump_time_diff("timer1 fired", &cycle_start_time);
         } state cycle
-        when (delay(timer2.delay)) {
-            timer_update(&timer2);
+        when (timer_delay(&timer2)) {
             dump_time_diff("timer2 fired", &cycle_start_time);
         } state cycle
-        when (delay(timer3.delay)) {
-            timer_update(&timer3);
+        when (timer_delay(&timer3)) {
             dump_time_diff("timer3 fired", &cycle_start_time);
         } state cycle
     }
