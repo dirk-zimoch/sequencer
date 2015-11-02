@@ -7,20 +7,21 @@
 program timerExample
 
 struct timer {
-    double delta_delay; /* initial delay */
-    double delay;       /* current delay */
+    double delay;   /* current delay (0.0 means not yet started) */
 };
 
-struct timer timer1, timer2, timer3;
-
-void timer_init(struct timer *timer, double delay_time) {
-    timer->delay = timer->delta_delay = delay_time;
+void timer_reset(struct timer *timer) {
+    timer->delay = 0.0;
 }
 
-int timer_delay(struct timer *timer) {
-    int result = delay(timer->delay);
+int timer_delay(struct timer *timer, double delay_time) {
+    int result;
+    if (!timer->delay) {
+        timer->delay = delay_time;
+    }
+    result = delay(timer->delay);
     if (result) {
-        timer->delay += timer->delta_delay;
+        timer->delay += delay_time;
     }
     return result;
 }
@@ -40,11 +41,12 @@ entry {
 
 ss timer {
     struct epicsTimeStamp cycle_start_time;
+    struct timer timer1, timer2, timer3;
     state reset {
         when () {
-            timer_init(&timer1, 0.333);
-            timer_init(&timer2, 0.877);
-            timer_init(&timer3, 2.797);
+            timer_reset(&timer1);
+            timer_reset(&timer2);
+            timer_reset(&timer3);
             epicsTimeGetCurrent(&cycle_start_time);
             dump_time_diff("timers initialized", &start_time);
         } state cycle
@@ -53,13 +55,13 @@ ss timer {
         option -t;
         when (delay(60.166)) {
         } state reset
-        when (timer_delay(&timer1)) {
+        when (timer_delay(&timer1, 0.333)) {
             dump_time_diff("timer1", &cycle_start_time);
         } state cycle
-        when (timer_delay(&timer2)) {
+        when (timer_delay(&timer2, 0.877)) {
             dump_time_diff("timer2", &cycle_start_time);
         } state cycle
-        when (timer_delay(&timer3)) {
+        when (timer_delay(&timer3, 2.797)) {
             dump_time_diff("timer3", &cycle_start_time);
         } state cycle
     }
