@@ -45,11 +45,8 @@ vpath %.lem ..
 vpath %.lt ..
 vpath %.txt $(COMMON_DIR)
 
-snl.c snl.h snl.out: parser_created
-
-parser_created: snl.lem snl.lt $(LEMON)
+%.c %.h: %.lem %.lt $(LEMON)
 	$(LEMON) o=. $<
-	@echo > parser_created
 
 vpath %.re ..
 
@@ -70,7 +67,7 @@ ifeq ($(BASE_3_14),YES)
 	@-$(MKMF) $(HDEPENDS_FLAGS) -m $*$(DEP) $(HDEPENDS_INCLUDES) $*$(OBJ) $<
 endif
 
-CLEANS += lexer.c lexer$(DEP) parser_created snl.c snl$(DEP) snl.h
+CLEANS += lexer.c lexer$(DEP) snl.c snl$(DEP) snl.h
 
 # there is no rule like this in base 3.14
 ifeq ($(BASE_3_14),YES)
