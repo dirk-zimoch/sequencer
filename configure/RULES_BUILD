@@ -77,11 +77,11 @@ endef
 
 %.c: %.i $(SNC)
 	$(ECHO) "compiling $< to C"
-	$(SNC) $(TARGET_SNCFLAGS) $(SNCFLAGS) $(USR_SNCFLAGS) $(call PATH_FILTER,$<) -o $(*F).c
+	$(COMPILE.snl)
 
 %.c: %.stt $(SNC)
 	$(ECHO) "compiling $< to C"
-	$(SNC) $(TARGET_SNCFLAGS) $(SNCFLAGS) $(USR_SNCFLAGS) $(call PATH_FILTER,$<) -o $(*F).c
+	$(COMPILE.snl)
 
 CLEANS += $(wildcard *.d)
 
