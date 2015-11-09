@@ -49,11 +49,8 @@ vpath %.txt $(COMMON_DIR)
 
 vpath %.re ..
 
-# this ifdef needed for 3.14.8 compatibility
-ifdef T_A
 %.c: %.re
 	$(RE2C) -s -b -o $@ $<
-endif
 
 $(COMMON_DIR)/snl.bnf: snl.lem
 	$(LEMON) o=. -g $< > $@.tmp
@@ -74,8 +71,6 @@ CLEANS += lexer.c snl.c snl.h
 
 # there is no rule like this in base 3.14
 ifeq ($(BASE_3_14),YES)
-ifdef T_A
 clean::
 	@$(RM) $(CLEANS)
-endif
 endif
