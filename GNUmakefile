@@ -9,8 +9,9 @@ SNL=snl/R$(EPICSVERSION)
 
 MAKE_FIRST = snl
 snl:
-	make -f Makefile src EPICS_BASE=$(EPICS_BASE) INSTALL_LOCATION=$(PWD)/$(SNL)
-
+	make -f Makefile src EPICS_BASE=$(EPICS_BASE) INSTALL_LOCATION=$(PWD)/$(SNL) \
+            PATH=$(PATH):$(PWD)/re2c/$(EPICS_HOST_ARCH) \
+            CROSS_COMPILER_TARGET_ARCHS="$(filter-out ${EPICS_HOST_ARCH} $(addprefix %,${EXCLUDE_ARCHS}) $(addsuffix %,${EXCLUDE_ARCHS}),$(if ${ARCH_FILTER},$(filter ${ARCH_FILTER},${CROSS_COMPILER_TARGET_ARCHS}),${CROSS_COMPILER_TARGET_ARCHS}))"
 
 HEADERS += $(SNL)/include/seq_snc.h
 HEADERS += $(SNL)/include/seqCom.h
