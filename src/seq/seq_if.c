@@ -1056,11 +1056,20 @@ epicsShareFunc void seq_pvFlushQ(SS_ID ss, CH_ID ch)
 {
 	PROG	*sp = ss->prog;
 	evflag	ev_flag = ch->syncedTo;
-	QUEUE	queue = ch->queue;
+
+	if (!ch->queue)
+	{
+		errlogSevPrintf(errlogMinor,
+			"pvFlushQ(%s): user error (not queued)\n",
+			ch->varName);
+		return;
+	}
 
 	DEBUG("pvFlushQ: pv name=%s, count=%d\n",
-		ch->dbch ? ch->dbch->dbName : "<anomymous>", seqQueueUsed(queue));
-	seqQueueFlush(queue);
+		ch->dbch ? ch->dbch->dbName : "<anomymous>",
+		seqQueueUsed(ch->queue));
+
+	seqQueueFlush(ch->queue);
 
 	epicsMutexMustLock(sp->lock);
 	/* Clear event flag */
