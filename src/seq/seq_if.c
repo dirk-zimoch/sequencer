@@ -1071,10 +1071,13 @@ epicsShareFunc void seq_pvFlushQ(SS_ID ss, CH_ID ch)
 
 	seqQueueFlush(ch->queue);
 
-	epicsMutexMustLock(sp->lock);
-	/* Clear event flag */
-	bitClear(sp->events, ev_flag);
-	epicsMutexUnlock(sp->lock);
+	if (ev_flag)
+	{
+		epicsMutexMustLock(sp->lock);
+		/* Clear event flag */
+		bitClear(sp->events, ev_flag - sp->eventFlags);
+		epicsMutexUnlock(sp->lock);
+	}
 }
 
 /*
