@@ -52,10 +52,12 @@ vpath %.re ..
 	$(RE2C) -s -b -o $@ $<
 
 $(COMMON_DIR)/snl.bnf: snl.lem
-	$(LEMON) o=. -g $< > $@
+	$(LEMON) o=. -g $< > $(@F).tmp
+	$(MV) $(@F).tmp $@
 
-$(COMMON_DIR)/Syntax.txt: ../bnf2txt.pl snl.re $(COMMON_DIR)/snl.bnf
-	$(PERL) $^ > $@
+$(COMMON_DIR)/Syntax.txt: ../bnf2txt.pl lexer.re $(COMMON_DIR)/snl.bnf
+	$(PERL) $^ > $@.tmp
+	$(MV) $@.tmp $@
 
 ifeq ($(BASE_3_14),YES)
 %$(DEP): %.c
