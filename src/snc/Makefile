@@ -62,8 +62,6 @@ $(COMMON_DIR)/Syntax.txt: ../bnf2txt.pl lexer.re $(COMMON_DIR)/snl.bnf
 ifeq ($(BASE_3_14),YES)
 %$(DEP): %.c
 	@-$(MKMF) $(HDEPENDS_FLAGS) -m $*$(DEP) $(HDEPENDS_INCLUDES) $*$(OBJ) $<
-else
-type_check$(DEP): parser_created
 endif
 
 $(HDEPENDS_FILES): | snl.h
