@@ -65,7 +65,7 @@ release: upload_docs upload_repo
 	$(RM) seq-$(SEQ_RELEASE).tar.gz
 
 changelog: force
-	DARCS_ALWAYS_COLOR=0 darcs changes -a --from-tag=. | egrep -v '^(Author|Date|patch)' > changelog
+	DARCS_ALWAYS_COLOR=0 darcs changes -a --from-tag=. | egrep -v '^(Author|Date|patch)' | sed 's/^  \*/*/' > changelog
 
 force:
 
