@@ -1,3 +1,7 @@
+ifeq ($(wildcard /ioc/tools/driver.makefile),)
+$(warning It seems you do not have the PSI build environment. Remove GNUmakefile.)
+include Makefile
+else
 include /ioc/tools/driver.makefile
 
 MODULE = seq
@@ -27,3 +31,4 @@ BINS_SL6 = $(SNL)/bin/$(T_A)/snc
 
 clean::
 	rm -rf snl `find src -name "O.*"`
+endif
