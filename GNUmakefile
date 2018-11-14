@@ -31,6 +31,7 @@ LIBOBJS_$(T_A) += $(SNL)/lib/$(T_A)/libseq.a
 LIBOBJS_$(T_A) += $(SNL)/lib/$(T_A)/libpv.a 
 
 BINS_SL6 = $(SNL)/bin/$(T_A)/snc
+BINS_RHEL7 = $(BINS_SL6)
 
 ifdef BASE_3_15
 clean:
