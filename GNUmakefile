@@ -1,7 +1,3 @@
-ifeq ($(wildcard /ioc/tools/driver.makefile),)
-$(warning It seems you do not have the PSI build environment. Remove GNUmakefile.)
-include Makefile
-else
 include /ioc/tools/driver.makefile
 
 MODULE = seq
@@ -41,4 +37,3 @@ else
 clean::
 endif
 	rm -rf snl `find src -name "O.*"`
-endif
