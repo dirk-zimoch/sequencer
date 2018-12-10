@@ -19,6 +19,7 @@ snl:
 	make -f Makefile src EPICS_BASE=$(EPICS)/base-$(EPICSVERSION) INSTALL_LOCATION=$(PWD)/$(SNL) \
             PATH=$(PATH):$(PWD)/re2c/$(EPICS_HOST_ARCH) \
             CROSS_COMPILER_TARGET_ARCHS="$(filter-out ${EPICS_HOST_ARCH} $(addprefix %,${EXCLUDE_ARCHS}) $(addsuffix %,${EXCLUDE_ARCHS}),$(if ${ARCH_FILTER},$(filter ${ARCH_FILTER},${CROSS_COMPILER_TARGET_ARCHS}),${CROSS_COMPILER_TARGET_ARCHS}))"
+	make -f Makefile clean EPICS_BASE=$(EPICS)/base-$(EPICSVERSION)
 
 HEADERS += $(SNL)/include/seq_snc.h
 HEADERS += $(SNL)/include/seqCom.h
