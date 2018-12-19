@@ -74,8 +74,12 @@ Type *type_of(Node *e)
         l = strip_pv_type(type_of(e->binop_left));
         r = strip_pv_type(type_of(e->binop_right));
         switch (e->token.symbol) {
-        case TOK_SUB:
         case TOK_ADD:
+            if (type_is_pointer(l) && type_is_pointer(r)) {
+                error_at_node(e, "invalid operands of binary %s\n", e->token.str);
+                return e->type = no_type;
+            }
+        case TOK_SUB:
             if (type_is_pointer(l) && !type_is_pointer(r)) {
                 return e->type = l;
             }
@@ -83,8 +87,7 @@ Type *type_of(Node *e)
                 return e->type = r;
             }
             if (type_is_pointer(l) && type_is_pointer(r)) {
-                error_at_node(e, "invalid operands of binary %s", e->token.str);
-                return e->type = no_type;
+                return e->type = num_type;
             }
             /* fall through */
         case TOK_ASTERISK:
