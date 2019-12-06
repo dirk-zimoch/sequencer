@@ -18,6 +18,7 @@ in the file LICENSE that is included with this distribution.
  *    cls.usask.ca
  */
 #include "seq.h"
+#include "epicsExport.h"
 
 struct sequencerProgram {
     seqProgram *prog;
@@ -257,3 +258,4 @@ epicsShareFunc void seqRegisterSequencerCommands(void)
         iocshRegister(&seqcarFuncDef,seqcarCallFunc);
     }
 }
+epicsExportRegistrar(seqRegisterSequencerCommands);
