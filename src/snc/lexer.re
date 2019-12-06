@@ -335,7 +335,7 @@ snl:
 	"^"		{ OPERATOR(CARET,	"^"); }
 	"|"		{ OPERATOR(VBAR,	"|"); }
 	"?"		{ OPERATOR(QUESTION,	"?"); }
-	[ \t\v\f]+	{ goto snl; }
+	[ \t\v\f\r]+	{ goto snl; }
 	ANY		{ scan_report(s, "invalid character\n"); DONE; }
 */
 
