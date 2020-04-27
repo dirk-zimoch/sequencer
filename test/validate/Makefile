@@ -13,16 +13,6 @@ SNCFLAGS_vxWorks += -nil-
 #  Set to path of valgrind executable if tests should run under valgrind
 USE_VALGRIND =
 
-#  Sequence programs and/or object files to create
-TESTPROD_HOST += decl
-TESTPROD_HOST += delay
-TESTPROD_HOST += entry
-TESTPROD_HOST += entryVar
-TESTPROD_HOST += optt
-TESTPROD_HOST += pvTimeStamp
-TESTPROD_HOST += syncq
-TESTPROD_HOST += version
-
 REGRESSION_TESTS_WITH_DB += bittypes
 REGRESSION_TESTS_WITH_DB += evflag
 REGRESSION_TESTS_WITH_DB += monitorEvflag
@@ -44,6 +34,7 @@ REGRESSION_TESTS_WITH_DB += norace
 
 REGRESSION_TESTS_WITHOUT_DB += array
 REGRESSION_TESTS_WITHOUT_DB += assign
+REGRESSION_TESTS_WITHOUT_DB += channelIndirection
 REGRESSION_TESTS_WITHOUT_DB += change
 REGRESSION_TESTS_WITHOUT_DB += commaOperator
 REGRESSION_TESTS_WITHOUT_DB += debug

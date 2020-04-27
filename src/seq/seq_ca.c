@@ -150,7 +150,6 @@ static void seq_get_handler(
 	PROG	*sp = ch->prog;
 
 	freeListFree(sp->pvReqPool, arg);
-	if (!ch->dbch) return;
 	/* ignore callback if not expected, e.g. already timed out */
 	if (ss->getReq[chNum(ch)] == rq)
 		proc_db_events(value, type, ch, ss, pvEventGet, status);
@@ -169,7 +168,6 @@ static void seq_put_handler(
 	PROG	*sp = ch->prog;
 
 	freeListFree(sp->pvReqPool, arg);
-	if (!ch->dbch) return;
 	/* ignore callback if not expected, e.g. already timed out */
 	if (ss->putReq[chNum(ch)] == rq)
 		proc_db_events(value, type, ch, ss, pvEventPut, status);
@@ -183,22 +181,20 @@ static void seq_mon_handler(
 {
 	CHAN	*ch = (CHAN *)arg;
 	PROG	*sp = ch->prog;
-	DBCHAN	*dbch = ch->dbch;
 
-	if (!dbch) return;
 	proc_db_events(value, type, ch, 0, pvEventMonitor, status);
-	if (!dbch->gotMonitor)
+	epicsMutexMustLock(sp->lock);
+	if (ch->dbch && !ch->dbch->gotMonitor)
 	{
-		dbch->gotMonitor = TRUE;
-		epicsMutexMustLock(sp->lock);
+		ch->dbch->gotMonitor = TRUE;
 		sp->gotMonitorCount++;
 		if (sp->gotMonitorCount == sp->monitorCount
 			&& sp->connectCount == sp->assignCount)
 		{
 			epicsEventSignal(sp->ready);
 		}
-		epicsMutexUnlock(sp->lock);
 	}
+	epicsMutexUnlock(sp->lock);
 }
 
 /*
@@ -246,13 +242,17 @@ static void proc_db_events(
 )
 {
 	PROG	*sp = ch->prog;
-	DBCHAN	*dbch = ch->dbch;
 	static const char *event_type_name[] = {"get","put","mon"};
 
-	assert(dbch != NULL);
+	epicsMutexMustLock(sp->lock);
+
+	if (!ch->dbch) {
+		epicsMutexUnlock(sp->lock);
+		return;
+	}
 
 	DEBUG("proc_db_events: var=%s, pv=%s, type=%s, status=%d\n", ch->varName,
-		dbch->dbName, event_type_name[evtype], status);
+		ch->dbch->dbName, event_type_name[evtype], status);
 
 	/* monitor on var queued via syncQ */
 	if (ch->queue && evtype == pvEventMonitor)
@@ -292,7 +292,7 @@ static void proc_db_events(
 		/* Set error message only when severity indicates error */
 		if (meta.severity != pvSevrNONE)
 		{
-			const char *pmsg = pvVarGetMess(dbch->pvid);
+			const char *pmsg = pvVarGetMess(ch->dbch->pvid);
 			if (!pmsg) pmsg = "unknown";
 			meta.message = pmsg;
 		}
@@ -301,8 +301,6 @@ static void proc_db_events(
 		   Set the dirty flag only if this was a monitor event. */
 		ss_write_buffer(ch, val, &meta, evtype == pvEventMonitor);
 	}
-
-	epicsMutexMustLock(sp->lock);
 
 	/* Signal completion */
 	switch (evtype)

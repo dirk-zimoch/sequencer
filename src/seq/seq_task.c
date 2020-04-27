@@ -434,3 +434,17 @@ void ss_wakeup(PROG *sp, unsigned eventNum)
 		epicsMutexUnlock(sp->lock);
 	}
 }
+
+/* 
+ * Immediately terminate all state sets and jump to global exit block.
+ */
+epicsShareFunc void seq_exit(SS_ID ss)
+{
+	PROG *sp = ss->prog;
+	/* Ask all state set threads to exit */
+	sp->die = TRUE;
+	/* Take care that we die even if waiting for initial connect */
+	epicsEventSignal(sp->ready);
+	/* Wakeup all state sets unconditionally */
+	ss_wakeup(sp, 0);
+}

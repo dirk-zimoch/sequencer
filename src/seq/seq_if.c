@@ -727,7 +727,8 @@ epicsShareFunc pvStat seq_pvAssign(SS_ID ss, CH_ID ch, const char *pvName)
 
 	if (pvName[0] == 0)	/* new name is empty -> free resources */
 	{
-		if (dbch) {
+		if (dbch)
+		{
 			free(dbch);
 		}
 	}
@@ -1056,16 +1057,28 @@ epicsShareFunc void seq_pvFlushQ(SS_ID ss, CH_ID ch)
 {
 	PROG	*sp = ss->prog;
 	evflag	ev_flag = ch->syncedTo;
-	QUEUE	queue = ch->queue;
+
+	if (!ch->queue)
+	{
+		errlogSevPrintf(errlogMinor,
+			"pvFlushQ(%s): user error (not queued)\n",
+			ch->varName);
+		return;
+	}
 
 	DEBUG("pvFlushQ: pv name=%s, count=%d\n",
-		ch->dbch ? ch->dbch->dbName : "<anomymous>", seqQueueUsed(queue));
-	seqQueueFlush(queue);
+		ch->dbch ? ch->dbch->dbName : "<anomymous>",
+		seqQueueUsed(ch->queue));
 
-	epicsMutexMustLock(sp->lock);
-	/* Clear event flag */
-	bitClear(sp->events, ev_flag - sp->eventFlags);
-	epicsMutexUnlock(sp->lock);
+	seqQueueFlush(ch->queue);
+
+	if (ev_flag)
+	{
+		epicsMutexMustLock(sp->lock);
+		/* Clear event flag */
+		bitClear(sp->events, ev_flag - sp->eventFlags);
+		epicsMutexUnlock(sp->lock);
+	}
 }
 
 /*
@@ -1118,18 +1131,4 @@ epicsShareFunc boolean seq_optGet(SS_ID ss, const char *opt)
 epicsShareFunc char *seq_macValueGet(SS_ID ss, const char *name)
 {
 	return seqMacValGet(ss->prog, name);
-}
-
-/* 
- * Immediately terminate all state sets and jump to global exit block.
- */
-epicsShareFunc void seq_exit(SS_ID ss)
-{
-	PROG *sp = ss->prog;
-	/* Ask all state set threads to exit */
-	sp->die = TRUE;
-	/* Take care that we die even if waiting for initial connect */
-	epicsEventSignal(sp->ready);
-	/* Wakeup all state sets unconditionally */
-	ss_wakeup(sp, 0);
 }
