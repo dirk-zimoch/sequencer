@@ -1,0 +1,2 @@
+EPICS_BASE=$(EPICS)/base-$(EPICSVERSION)
+#EPICS_BASE=/usr/local/epics/base-7.0.6
