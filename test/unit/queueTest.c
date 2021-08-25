@@ -36,7 +36,7 @@ static void check(QUEUE q, size_t expectedFree)
 static epicsEventId wdone, rdone, ready;
 
 static const int threadTestIterations = 1000000;
-static const size_t threadTestMaxNumElems = 20;
+static const unsigned threadTestMaxNumElems = 20;
 
 static int readerLost, writerLost;
 
@@ -82,7 +82,7 @@ static void writerTask(void *arg)
 
 MAIN(queueTest)
 {
-    size_t numElems;
+    unsigned numElems;
     QUEUE q;
     epicsThreadId reader, writer;
 
@@ -98,9 +98,9 @@ MAIN(queueTest)
     for (numElems = 1; numElems <= maxNumElems; numElems++) {
         ELEM put[2*maxNumElems];
         ELEM get[2*maxNumElems];
-        size_t i;
+        unsigned i;
 
-        testDiag("sequential queueTest with numElems=%u", (unsigned)numElems);
+        testDiag("sequential queueTest with numElems=%u", numElems);
 
         q = seqQueueCreate(numElems, sizeof(ELEM));
         if (!q) {
@@ -111,27 +111,27 @@ MAIN(queueTest)
         for (i = 0 ; i < 2*numElems ; i++)
             put[i] = i;
         for(i = 1 ; i <= 2*numElems ; i++) {
-            size_t j;
+            unsigned j;
             for (j = 0; j < i; j++) {
                 int full = seqQueuePut(q, put+j);
-                testOk(full==(j>=numElems), "q put %lu", (unsigned long)j);
+                testOk(full==(j>=numElems), "q put %u", j);
             }
             check(q, numElems > i ? numElems - i : 0);
             for (j = 0; j < i; j++) {
                 int empty;
-                get[j] = -1ull;
+                get[j] = -1;
                 empty = seqQueueGet(q, get+j);
-                testOk(empty==(j>=numElems), "q get %lu", (unsigned long)j);
+                testOk(empty==(j>=numElems), "q get %u", j);
             }
             check(q, numElems);
             for (j = 0; j < i; j++) {
                 if (j < numElems-1) {
-                    testOk(get[j]==put[j], "get[%lu]==put[%lu]", (unsigned long)j, (unsigned long)j);
+                    testOk(get[j]==put[j], "get[%u]==put[%u]", j, j);
                 } else if (j == numElems-1 && i>=numElems) {
                     testOk(get[j]==put[i-1],
-                        "overflow: get[%lu]==put[%lu]", (unsigned long)j, (unsigned long)i-1);
+                        "overflow: get[%u]==put[%u]", j, i-1);
                 } else {
-                    testOk(get[j]==-1ull, "get[%lu] unchanged", (unsigned long)j);
+                    testOk(get[j]==-1, "get[%u] unchanged", j);
                 }
             }
         }
@@ -140,7 +140,7 @@ MAIN(queueTest)
 
     for (numElems = 1; numElems <= threadTestMaxNumElems; numElems++) {
 
-        testDiag("concurrent queueTest with numElems=%u", (unsigned)numElems);
+        testDiag("concurrent queueTest with numElems=%u", numElems);
 
         q = seqQueueCreate(numElems, sizeof(string));
         wdone = epicsEventCreate(epicsEventEmpty);

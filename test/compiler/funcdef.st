@@ -24,7 +24,7 @@ ss simple {
         when () {
             void *p = f1();
             p = f2(p,(double **)f1a);
-            pvSetX(1.0);
+            pvSetX(1);
         } exit
     }
 }

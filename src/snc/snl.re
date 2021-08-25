@@ -86,11 +86,11 @@ We also add a '\n' byte at the end of the file as sentinel.
 static uchar *fill(Scanner *s, uchar *cursor) {
 	/* does not touch s->cur, instead works with argument cursor */
 	if (!s->eof) {
-		uint read_cnt;			/* number of bytes read */
-		int garbage = s->tok - s->bot;	/* number of garbage bytes */
-		int valid = s->lim - s->tok;	/* number of still valid bytes to copy */
-		uchar *token = s->tok;		/* start of valid bytes */
-		int space = (s->top - s->lim) + garbage;
+		size_t read_cnt;			/* number of bytes read */
+		size_t garbage = s->tok - s->bot;	/* number of garbage bytes */
+		size_t valid = s->lim - s->tok;		/* number of still valid bytes to copy */
+		uchar *token = s->tok;			/* start of valid bytes */
+		size_t space = (s->top - s->lim) + garbage;
 						/* remaining space after garbage collection */
 		int need_alloc = space < BSIZE;	/* do we need to allocate a new buffer? */
 
@@ -192,7 +192,7 @@ static int scan(Scanner *s, Token *t) {
 	can appear nested inside c_code block tokens, so using s->tok for
 	line_markers would destroy them.
 	*/
-	int line_marker_part = 0;
+	size_t line_marker_part = 0;
 
 	s->end = 0;
 
@@ -361,7 +361,7 @@ string_cat:
 				goto string_cat;
 			}
 	["]		{
-				int len = s->end - s->tok;
+				size_t len = s->end - s->tok;
 				assert(len >= 0);
 				memmove(cursor - len, s->tok, (size_t)len);
 				s->tok = cursor - len;

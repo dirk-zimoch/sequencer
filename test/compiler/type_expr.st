@@ -9,7 +9,7 @@ program type_exprTest
 option +r;
 
 entry {
-    long n = 0;
+    typename size_t n = 0;
     void *p = (void *)n;
     void **pp = (void**)n;
     void (*pf1)(void) = (void (*)(void))n;

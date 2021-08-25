@@ -30,7 +30,7 @@ ss ss1
 	    when(delay(2.0)) 
 	    {
 		printf("low, delay timeout, incr v and now reenter low\n");
-		v = v+1.0;
+		v = v+1;
 		printf("v = %g\n",v); 
 	    } state low
 	    exit 
@@ -50,7 +50,7 @@ ss ss1
 	    when(delay(3.0))
 	    {
 		printf("high, delay 3.0 timeout, decr v and re-enter high\n");
-		v = v-1.0;
+		v = v-1;
 		printf("v = %g\n",v); 
 	    } state high
 	}
