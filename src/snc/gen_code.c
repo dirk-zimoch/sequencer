@@ -67,13 +67,13 @@ void generate_code(Program *p)
 	gen_code("\n");
 	gen_code("#include \"seq_snc.h\"\n");
 
+	/* Variable declarations */
+	gen_var_struct(p->prog, p->options.reent);
+
 	/* Initial definitions *except* global variable declarations,
 	   in the order in which they appear in the program.
 	   Note: this includes escaped C code. */
 	foreach (defn, p->prog->prog_defns) gen_global_defn(defn);
-
-	/* Variable declarations */
-	gen_var_struct(p->prog, p->options.reent);
 
 	/* Function declarations */
 	gen_func_decls(p->prog);
